@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-export default function LostFoundScreen() {
+export default function TrustedCircleScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Lost & Found</Text>
-      <Text style={styles.sub}>Report or search for lost items</Text>
+      <Text style={styles.title}>Trusted Circle</Text>
+      <Text style={styles.sub}>Manage your emergency contacts</Text>
       <View style={styles.placeholder}>
-        <Text style={styles.placeholderText}>Items list will be displayed here</Text>
+        <Text style={styles.placeholderText}>Contact list will be displayed here</Text>
       </View>
     </View>
   );

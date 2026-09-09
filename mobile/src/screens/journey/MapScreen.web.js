@@ -1,22 +1,15 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
-export default function MapScreen() {
+export default function MapScreenWeb() {
   return (
     <View style={styles.container}>
-      <MapView
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        initialRegion={{
-          latitude: 7.8731, // Default to Sri Lanka / Colombo area
-          longitude: 80.7718,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        }}
-      >
-        {/* Map markers and journey tracking will be implemented here */}
-      </MapView>
+      <View style={styles.mapPlaceholder}>
+        <Text style={styles.text}>Map View (Web Placeholder)</Text>
+        <Text style={styles.subText}>
+          Google Maps is currently only configured for Android/iOS.
+        </Text>
+      </View>
       <View style={styles.overlay}>
         <Text style={styles.text}>Live Journey Tracking</Text>
       </View>
@@ -27,9 +20,13 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f0f0f0',
   },
-  map: {
+  mapPlaceholder: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ddd',
   },
   overlay: {
     position: 'absolute',
@@ -47,8 +44,14 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   text: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#E53935',
+  },
+  subText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 10,
   },
 });
