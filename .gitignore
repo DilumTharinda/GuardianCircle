@@ -1,2 +1,4 @@
 scripts/serviceAccountKey.json
 scripts/.env.bootstrap
+scripts/node_modules/
+node_modules/
