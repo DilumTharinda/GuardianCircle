@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.development
+.env.production
+
+# Native builds
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+android/
+ios/
+
+# Build artifacts
+*.apk
+*.aab
+*.ipa
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/settings.json
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# EAS
+.easignore
