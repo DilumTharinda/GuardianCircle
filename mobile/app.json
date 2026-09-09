@@ -5,7 +5,8 @@
     "version": "1.0.0",
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
     "android": {
       "package": "com.guardiancircle.app",
