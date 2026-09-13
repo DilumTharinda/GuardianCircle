@@ -11,23 +11,31 @@ export function useShakeSOS(onCountdownStart) {
   useEffect(() => {
     if (Platform.OS === 'web') return; // Accelerometer not supported on web desktop
 
+    let sub = null;
     try {
       const { Accelerometer } = require('expo-sensors');
-      Accelerometer.setUpdateInterval(100);
-      const sub = Accelerometer.addListener(({ x, y, z }) => {
-        const magnitude = Math.sqrt(x * x + y * y + z * z);
-        const now = Date.now();
-        if (magnitude > SHAKE_THRESHOLD && now - lastShake.current > 3000) {
-          lastShake.current = now;
-          const cancel = startCancellableSOS(TRIGGER_TYPES.SHAKE, 5, (remaining) => {
-            console.log('Shake countdown:', remaining);
-          });
-          onCountdownStart?.(cancel);
-        }
-      });
-      return () => sub.remove();
+      if (Accelerometer && typeof Accelerometer.addListener === 'function') {
+        Accelerometer.setUpdateInterval(100);
+        sub = Accelerometer.addListener(({ x, y, z }) => {
+          const magnitude = Math.sqrt(x * x + y * y + z * z);
+          const now = Date.now();
+          if (magnitude > SHAKE_THRESHOLD && now - lastShake.current > 3000) {
+            lastShake.current = now;
+            const cancel = startCancellableSOS(TRIGGER_TYPES.SHAKE, 5, (remaining) => {
+              console.log('Shake countdown:', remaining);
+            });
+            onCountdownStart?.(cancel);
+          }
+        });
+      }
     } catch (e) {
       console.warn('[useShakeSOS] Sensor unavailable:', e);
     }
+
+    return () => {
+      if (sub && typeof sub.remove === 'function') {
+        sub.remove();
+      }
+    };
   }, []);
 }
