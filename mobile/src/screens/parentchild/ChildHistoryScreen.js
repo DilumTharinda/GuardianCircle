@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
-import { getChildren, getChildHistory } from '../../services/parentChildService';
+import { getChildren, getChildHistory, clearChildHistory } from '../../services/parentChildService';
 
 const FILTER_TYPES = [
   { id: 'all', label: 'All Events' },
@@ -52,6 +52,14 @@ export default function ChildHistoryScreen() {
     loadData();
   }, [loadData]);
 
+  // Periodic polling every 4 seconds to sync newly generated history events
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
   const activeChild =
     childrenList.find((c) => c.id === selectedChildId) || childrenList[0] || null;
 
@@ -69,6 +77,25 @@ export default function ChildHistoryScreen() {
     } catch (error) {
       Alert.alert('Export Report', summary);
     }
+  }
+
+  async function handleClearHistory() {
+    if (!activeChild) return;
+    Alert.alert(
+      'Clear Timeline History',
+      `Are you sure you want to clear the activity log for ${activeChild.targetName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Logs',
+          style: 'destructive',
+          onPress: async () => {
+            await clearChildHistory(activeChild.id);
+            await loadData();
+          },
+        },
+      ]
+    );
   }
 
   if (loading) {
@@ -224,6 +251,15 @@ export default function ChildHistoryScreen() {
           activeOpacity={0.8}
         >
           <Text style={styles.exportBtnText}>📤 Export & Share Daily Summary</Text>
+        </TouchableOpacity>
+
+        {/* Clear History Button */}
+        <TouchableOpacity
+          style={[styles.exportBtn, { backgroundColor: '#FEE2E2', marginTop: 10 }]}
+          onPress={handleClearHistory}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.exportBtnText, { color: '#DC2626' }]}>🗑️ Clear Timeline Activity Log</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
