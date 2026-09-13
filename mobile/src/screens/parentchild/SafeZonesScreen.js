@@ -23,9 +23,11 @@ import {
 const ZONE_PRESETS = [
   { name: 'Home', icon: '🏠', color: '#2E7D32', defaultRadius: 150 },
   { name: 'School', icon: '🏫', color: '#1976D2', defaultRadius: 250 },
-  { name: "Grandma's", icon: '👵', color: '#7B1FA2', defaultRadius: 200 },
+  { name: 'Tuition / Class', icon: '📚', color: '#00897B', defaultRadius: 200 },
+  { name: 'Police / Safe Point', icon: '🛡️', color: '#D32F2F', defaultRadius: 150 },
+  { name: 'Hospital / Clinic', icon: '🏥', color: '#E53935', defaultRadius: 200 },
+  { name: "Grandparent's", icon: '👵', color: '#7B1FA2', defaultRadius: 200 },
   { name: 'Sports Complex', icon: '⚽', color: '#FB8C00', defaultRadius: 350 },
-  { name: 'Library / Study', icon: '📚', color: '#00897B', defaultRadius: 200 },
   { name: 'Park / Playground', icon: '🌳', color: '#43A047', defaultRadius: 300 },
 ];
 
