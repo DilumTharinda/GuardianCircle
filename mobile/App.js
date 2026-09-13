@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -17,6 +17,9 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('App ErrorBoundary caught:', error, errorInfo);
   }
+  resetError = () => {
+    this.setState({ hasError: false, error: null });
+  };
   render() {
     if (this.state.hasError) {
       return (
@@ -24,6 +27,9 @@ class ErrorBoundary extends React.Component {
           <Text style={styles.errorTitle}>GuardianCircle</Text>
           <Text style={styles.errorSubtitle}>Something went wrong while rendering:</Text>
           <Text style={styles.errorMsg}>{String(this.state.error?.message || this.state.error)}</Text>
+          <TouchableOpacity style={styles.resetBtn} onPress={this.resetError} activeOpacity={0.8}>
+            <Text style={styles.resetBtnText}>🔄 Reset & Continue</Text>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -73,5 +79,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontFamily: 'monospace',
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  resetBtn: {
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  resetBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
