@@ -9,6 +9,8 @@ export default function ChildCard({
   onNavigateLocation,
   onNavigateHistory,
   onNavigateSafeZones,
+  onOpenChildDevice,
+  onUnlink,
   onToggleSOS,
 }) {
   if (!child) return null;
@@ -105,7 +107,7 @@ export default function ChildCard({
         </Text>
       </View>
 
-      {/* Quick Action Buttons */}
+      {/* Quick Action Buttons Row 1 */}
       <View style={styles.actionsDivider} />
       <View style={styles.actionsRow}>
         <TouchableOpacity
@@ -131,17 +133,27 @@ export default function ChildCard({
         >
           <Text style={styles.actionBtnText}>📜 History</Text>
         </TouchableOpacity>
+      </View>
 
-        {/* SOS Simulator Toggle Button */}
-        {onToggleSOS && (
+      {/* Action Buttons Row 2: Child Device Mode & Management */}
+      <View style={[styles.actionsRow, { marginTop: 6 }]}>
+        {onOpenChildDevice && (
           <TouchableOpacity
-            style={[styles.actionBtn, isSOS ? styles.resolveBtn : styles.simSosBtn]}
-            onPress={onToggleSOS}
+            style={[styles.actionBtn, styles.childModeBtn]}
+            onPress={onOpenChildDevice}
             activeOpacity={0.7}
           >
-            <Text style={[styles.actionBtnText, isSOS ? styles.resolveBtnText : styles.simSosText]}>
-              {isSOS ? 'Resolve' : 'Sim SOS'}
-            </Text>
+            <Text style={styles.childModeBtnText}>📱 View as Child (SOS)</Text>
+          </TouchableOpacity>
+        )}
+
+        {onUnlink && (
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.unlinkBtn]}
+            onPress={onUnlink}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.unlinkBtnText}>✕ Unlink</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -336,6 +348,26 @@ const styles = StyleSheet.create({
   },
   resolveBtnText: {
     color: '#FFF',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  childModeBtn: {
+    backgroundColor: '#0F172A',
+    flex: 2,
+    paddingVertical: 9,
+  },
+  childModeBtnText: {
+    color: '#38BDF8',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  unlinkBtn: {
+    backgroundColor: '#FEE2E2',
+    flex: 1,
+    paddingVertical: 9,
+  },
+  unlinkBtnText: {
+    color: '#DC2626',
     fontWeight: '700',
     fontSize: 11,
   },
