@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import {
-  toggleBleProximity,
-  pingBleTag,
-  addPetOrItem,
+  simulateToggleBleProximity,
+  simulatePingBleTag,
+  simulateAddPetOrItem,
+  simulateDeletePetOrItem,
 } from '../../services/parentChildService';
 
 export default function PetItemSection({ items = [], onRefresh }) {
@@ -25,7 +26,7 @@ export default function PetItemSection({ items = [], onRefresh }) {
   const [loading, setLoading] = useState(false);
 
   async function handleToggleProximity(itemId) {
-    await toggleBleProximity(itemId);
+    await simulateToggleBleProximity(itemId);
     if (onRefresh) onRefresh();
   }
 
@@ -37,9 +38,27 @@ export default function PetItemSection({ items = [], onRefresh }) {
       );
       return;
     }
-    await pingBleTag(item.id);
+    await simulatePingBleTag(item.id);
     if (onRefresh) onRefresh();
     Alert.alert('🔔 BLE Tag Triggered', `Buzzer activated on ${item.name} for 4 seconds!`);
+  }
+
+  async function handleDeleteTag(item) {
+    Alert.alert(
+      'Unpair Tag',
+      `Are you sure you want to remove "${item.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unpair',
+          style: 'destructive',
+          onPress: async () => {
+            await simulateDeletePetOrItem(item.id);
+            if (onRefresh) onRefresh();
+          },
+        },
+      ]
+    );
   }
 
   async function handleAddTag() {
@@ -49,7 +68,7 @@ export default function PetItemSection({ items = [], onRefresh }) {
     }
     setLoading(true);
     try {
-      await addPetOrItem('parent_user_default', {
+      await simulateAddPetOrItem('parent_user_default', {
         name: tagName.trim(),
         type: tagType,
       });
@@ -82,8 +101,15 @@ export default function PetItemSection({ items = [], onRefresh }) {
 
       {expanded && (
         <View style={styles.body}>
+          {/* Phase 2 BLE Simulation Notice */}
+          <View style={styles.phase2Notice}>
+            <Text style={styles.phase2NoticeText}>
+              ⚙️ SRS Phase 2: UI-Only Simulation Stubs (Zero BLE hardware required)
+            </Text>
+          </View>
+
           <Text style={styles.sectionSubtitle}>
-            BLE Proximity Beacon tags for pet collars, backpacks, and keys.
+            Simulated BLE Proximity Beacon tags for pet collars, backpacks, and keys.
           </Text>
 
           {items.map((item) => {
@@ -120,7 +146,7 @@ export default function PetItemSection({ items = [], onRefresh }) {
                             { color: inRange ? COLORS.safeGreen : COLORS.warnOrange },
                           ]}
                         >
-                          {inRange ? '🟢 In Range (BLE)' : '⚪ Out of Range'}
+                          {inRange ? '🟢 In Range (Simulated BLE)' : '⚪ Out of Range'}
                         </Text>
                       </View>
 
@@ -162,6 +188,16 @@ export default function PetItemSection({ items = [], onRefresh }) {
                       {inRange ? 'Simulate Exit' : 'Simulate Enter'}
                     </Text>
                   </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.simulateBtn, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+                    onPress={() => handleDeleteTag(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.simulateBtnText, { color: '#DC2626' }]}>
+                      Unpair
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             );
@@ -172,7 +208,7 @@ export default function PetItemSection({ items = [], onRefresh }) {
             onPress={() => setModalVisible(true)}
             activeOpacity={0.8}
           >
-            <Text style={styles.addTagBtnText}>+ Add Pet Collar or BLE Item Tag</Text>
+            <Text style={styles.addTagBtnText}>+ Add Simulated Pet / Item BLE Tag</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -281,6 +317,20 @@ const styles = StyleSheet.create({
   },
   body: {
     marginTop: SPACING.md,
+  },
+  phase2Notice: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: RADIUS.sm,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    marginBottom: SPACING.sm,
+  },
+  phase2NoticeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1D4ED8',
   },
   sectionSubtitle: {
     fontSize: 12,

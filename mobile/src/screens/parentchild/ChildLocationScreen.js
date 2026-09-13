@@ -19,6 +19,7 @@ import {
   triggerMockSOS,
 } from '../../services/parentChildService';
 import MapFallbackView from '../../components/parentchild/MapFallbackView';
+import ChildDeviceModal from '../../components/parentchild/ChildDeviceModal';
 
 // Conditionally import react-native-maps to avoid crashes on web
 let MapView = null;
@@ -46,6 +47,7 @@ export default function ChildLocationScreen() {
   const [selectedChildId, setSelectedChildId] = useState(initialChildId);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
+  const [childDeviceVisible, setChildDeviceVisible] = useState(false);
   const mapRef = useRef(null);
 
   const loadData = useCallback(async () => {
@@ -64,6 +66,14 @@ export default function ChildLocationScreen() {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  // Periodic polling every 4 seconds to sync live coordinates and SOS state
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData();
+    }, 4000);
+    return () => clearInterval(interval);
   }, [loadData]);
 
   const activeChild =
@@ -121,10 +131,16 @@ export default function ChildLocationScreen() {
     );
 
     await loadData();
-    Alert.alert(
-      '📍 Live GPS Ping Updated',
-      `New coordinates received for ${activeChild.targetName}!\nSafe-zone boundaries re-evaluated: Status is "${updated?.currentZoneName}".`
-    );
+    const transitions = updated?.transitionSummary;
+    let transitionText = `New coordinates received for ${activeChild.targetName}!\nStatus: "${updated?.currentZoneName}".`;
+    if (transitions?.entered?.length > 0) {
+      transitionText += `\n🟢 ENTERED SAFE ZONE: ${transitions.entered.join(', ')}`;
+    }
+    if (transitions?.exited?.length > 0) {
+      transitionText += `\n🟡 LEFT SAFE ZONE: ${transitions.exited.join(', ')}`;
+    }
+
+    Alert.alert('📍 Live GPS Ping Updated', transitionText);
   }
 
   if (loading) {
@@ -297,8 +313,27 @@ export default function ChildLocationScreen() {
           >
             <Text style={styles.simMoveBtnText}>🚶 Simulate Movement & Geofence Ping</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.simMoveBtn, { backgroundColor: '#0F172A', marginTop: 8 }]}
+            onPress={() => setChildDeviceVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.simMoveBtnText, { color: '#38BDF8' }]}>📱 View as Child (SOS & Check-in)</Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* Child Device Simulation Modal (FR-4.4) */}
+      <ChildDeviceModal
+        visible={childDeviceVisible}
+        child={activeChild}
+        onClose={() => {
+          setChildDeviceVisible(false);
+          loadData();
+        }}
+        onStateChange={loadData}
+      />
     </View>
   );
 }

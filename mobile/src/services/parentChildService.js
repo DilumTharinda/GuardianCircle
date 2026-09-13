@@ -796,6 +796,7 @@ export async function createManagedChildProfile(parentUid = 'parent_user_default
 
 /**
  * Update child location coordinates and evaluate geofences.
+ * Automatically detects entry/exit transitions and logs them to the history timeline.
  */
 export async function updateChildLocation(childId, coords, address = '') {
   const children = await getStoredChildren();
@@ -803,21 +804,35 @@ export async function updateChildLocation(childId, coords, address = '') {
   if (index === -1) return null;
 
   const child = children[index];
+  const previousSafeZones = child.safeZones || [];
   const newLocation = {
     latitude: coords.latitude,
     longitude: coords.longitude,
-    address: address || child.lastLocation.address,
+    address: address || child.lastLocation?.address || 'Colombo, Sri Lanka',
     timestamp: new Date().toISOString(),
   };
 
-  // Re-evaluate safe zones
+  // Re-evaluate safe zones and detect entry/exit boundary transitions
   let insideZoneName = 'In Transit';
-  const updatedSafeZones = (child.safeZones || []).map((zone) => {
-    const isInside = isInsideZone(newLocation, zone);
-    if (isInside) {
+  const newlyEnteredZones = [];
+  const newlyExitedZones = [];
+
+  const updatedSafeZones = previousSafeZones.map((zone) => {
+    const wasInside = zone.isInside === true;
+    const isNowInside = isInsideZone(newLocation, zone);
+
+    if (isNowInside) {
       insideZoneName = zone.name;
     }
-    return { ...zone, isInside };
+
+    // Detect transition
+    if (!wasInside && isNowInside) {
+      newlyEnteredZones.push(zone);
+    } else if (wasInside && !isNowInside) {
+      newlyExitedZones.push(zone);
+    }
+
+    return { ...zone, isInside: isNowInside };
   });
 
   const updatedChild = {
@@ -829,7 +844,54 @@ export async function updateChildLocation(childId, coords, address = '') {
 
   children[index] = updatedChild;
   await saveStoredChildren(children);
-  return updatedChild;
+
+  // Automatically record boundary transition events to history timeline
+  const history = await getStoredHistory();
+  const childEvents = history[childId] || [];
+  const newEvents = [];
+
+  for (const zone of newlyEnteredZones) {
+    newEvents.push({
+      id: `zone_enter_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      type: 'safe_zone_entry',
+      title: 'Entered Safe Zone',
+      locationName: zone.name,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fullDate: new Date().toISOString(),
+      category: 'zone',
+      color: '#2E7D32',
+      icon: zone.icon || '🟢',
+      description: `${child.targetName} entered ${zone.name} perimeter (${zone.radius}m radius).`,
+    });
+  }
+
+  for (const zone of newlyExitedZones) {
+    newEvents.push({
+      id: `zone_exit_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      type: 'safe_zone_exit',
+      title: 'Left Safe Zone',
+      locationName: zone.name,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      fullDate: new Date().toISOString(),
+      category: 'zone',
+      color: '#FB8C00',
+      icon: '🟡',
+      description: `${child.targetName} left ${zone.name} perimeter. Now in transit.`,
+    });
+  }
+
+  if (newEvents.length > 0) {
+    history[childId] = [...newEvents, ...childEvents];
+    await saveStoredHistory(history);
+  }
+
+  return {
+    ...updatedChild,
+    transitionSummary: {
+      entered: newlyEnteredZones.map((z) => z.name),
+      exited: newlyExitedZones.map((z) => z.name),
+    },
+  };
 }
 
 /**
@@ -896,6 +958,16 @@ export async function deleteSafeZone(childId, zoneId) {
 }
 
 /**
+ * Unlink / remove a child from monitoring.
+ */
+export async function unlinkChild(childId) {
+  const children = await getStoredChildren();
+  const filtered = children.filter((c) => c.id !== childId);
+  await saveStoredChildren(filtered);
+  return true;
+}
+
+/**
  * Fetch child history events.
  */
 export async function getChildHistory(childId, dateFilter = 'today', typeFilter = 'all') {
@@ -910,7 +982,17 @@ export async function getChildHistory(childId, dateFilter = 'today', typeFilter 
 }
 
 /**
- * Send a check-in request to a child.
+ * Clear history logs for a child.
+ */
+export async function clearChildHistory(childId) {
+  const historyMap = await getStoredHistory();
+  historyMap[childId] = [];
+  await saveStoredHistory(historyMap);
+  return true;
+}
+
+/**
+ * Send a check-in request from Parent to a child.
  */
 export async function sendCheckInRequest(childId) {
   const child = await getChildById(childId);
@@ -921,15 +1003,15 @@ export async function sendCheckInRequest(childId) {
   const childEvents = history[childId] || [];
   const newEvent = {
     id: `req_${Date.now()}`,
-    type: 'check_in',
+    type: 'check_in_req',
     title: 'Check-in Request Sent',
-    locationName: child.lastLocation.address || 'Current Location',
-    timestamp: 'Just now',
+    locationName: child.lastLocation?.address || 'Current Location',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     fullDate: new Date().toISOString(),
     category: 'checkin',
     color: '#1976D2',
     icon: '📲',
-    description: `Parent sent check-in ping to ${child.targetName}.`,
+    description: `Parent requested location confirmation from ${child.targetName}.`,
   };
   history[childId] = [newEvent, ...childEvents];
   await saveStoredHistory(history);
@@ -938,57 +1020,158 @@ export async function sendCheckInRequest(childId) {
 }
 
 /**
- * Trigger or dismiss simulated SOS for testing UI.
+ * Child sends check-in confirmation ("I am safe").
  */
-export async function triggerMockSOS(childId, active = true) {
+export async function childSendCheckIn(childId, customNote = "I'm safe!") {
   const children = await getStoredChildren();
   const index = children.findIndex((c) => c.id === childId);
-  if (index === -1) return;
+  if (index === -1) throw new Error('Child not found');
 
-  children[index].sosActive = active;
-  children[index].sosTimestamp = active ? new Date().toISOString() : null;
-  await saveStoredChildren(children);
+  const child = children[index];
+  child.isOnline = true;
 
-  if (active) {
-    const history = await getStoredHistory();
-    const childEvents = history[childId] || [];
-    history[childId] = [
-      {
-        id: `sos_${Date.now()}`,
-        type: 'sos_alert',
-        title: 'EMERGENCY SOS TRIGGERED',
-        locationName: children[index].lastLocation.address,
-        timestamp: 'Just now',
-        fullDate: new Date().toISOString(),
-        category: 'alert',
-        color: '#D32F2F',
-        icon: '🚨',
-        description: `Emergency alert activated by ${children[index].targetName}!`,
-      },
-      ...childEvents,
-    ];
-    await saveStoredHistory(history);
+  // If SOS was active, child check-in marks safe
+  if (child.sosActive) {
+    child.sosActive = false;
+    child.sosTimestamp = null;
   }
 
-  return children[index];
+  children[index] = child;
+  await saveStoredChildren(children);
+
+  const history = await getStoredHistory();
+  const childEvents = history[childId] || [];
+  const newEvent = {
+    id: `checkin_${Date.now()}`,
+    type: 'check_in',
+    title: 'Child Checked In: Safe',
+    locationName: child.lastLocation?.address || 'Current Location',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    fullDate: new Date().toISOString(),
+    category: 'checkin',
+    color: '#2E7D32',
+    icon: '✅',
+    description: `${child.targetName} sent check-in confirmation: "${customNote}"`,
+  };
+  history[childId] = [newEvent, ...childEvents];
+  await saveStoredHistory(history);
+
+  return child;
+}
+
+/**
+ * Trigger Child SOS alert (Child-side trigger flow).
+ * Broadcasts emergency alert state to the linked parent dashboard and logs incident.
+ */
+export async function triggerChildSOS(childId, triggerSource = 'button') {
+  const children = await getStoredChildren();
+  const index = children.findIndex((c) => c.id === childId);
+  if (index === -1) throw new Error('Child not found');
+
+  const child = children[index];
+  child.sosActive = true;
+  child.sosTimestamp = new Date().toISOString();
+
+  children[index] = child;
+  await saveStoredChildren(children);
+
+  const history = await getStoredHistory();
+  const childEvents = history[childId] || [];
+  const newEvent = {
+    id: `sos_${Date.now()}`,
+    type: 'sos_alert',
+    title: 'EMERGENCY SOS TRIGGERED BY CHILD',
+    locationName: child.lastLocation?.address || 'Current Coordinates',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    fullDate: new Date().toISOString(),
+    category: 'alert',
+    color: '#D32F2F',
+    icon: '🚨',
+    description: `EMERGENCY ALERT: ${child.targetName} triggered SOS via ${triggerSource}! Location broadcasted to Parent Guardian.`,
+  };
+  history[childId] = [newEvent, ...childEvents];
+  await saveStoredHistory(history);
+
+  if (!USE_MOCK_DATA) {
+    try {
+      await setDoc(doc(db, 'alerts', `child_sos_${Date.now()}`), {
+        type: 'sos',
+        triggeredBy: child.targetUid || child.id,
+        triggerSource,
+        location: child.lastLocation,
+        timestamp: serverTimestamp(),
+        recipients: [child.ownerUid],
+        status: 'active',
+      });
+    } catch (err) {
+      console.warn('[parentChildService] Firestore alert write:', err);
+    }
+  }
+
+  return child;
 }
 
 /**
  * Resolve / dismiss active SOS for a child.
  */
 export async function resolveChildSOS(childId) {
-  return await triggerMockSOS(childId, false);
+  const children = await getStoredChildren();
+  const index = children.findIndex((c) => c.id === childId);
+  if (index === -1) return null;
+
+  const child = children[index];
+  child.sosActive = false;
+  child.sosTimestamp = null;
+  children[index] = child;
+  await saveStoredChildren(children);
+
+  const history = await getStoredHistory();
+  const childEvents = history[childId] || [];
+  const newEvent = {
+    id: `resolve_${Date.now()}`,
+    type: 'sos_resolved',
+    title: 'SOS Alert Resolved',
+    locationName: child.lastLocation?.address || 'Current Coordinates',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    fullDate: new Date().toISOString(),
+    category: 'alert',
+    color: '#2E7D32',
+    icon: '🛡️',
+    description: `Emergency alert for ${child.targetName} was resolved. Marked safe.`,
+  };
+  history[childId] = [newEvent, ...childEvents];
+  await saveStoredHistory(history);
+
+  return child;
 }
 
-// ==========================================
-// PET & ITEM BLE TRACKING METHODS
-// ==========================================
+/**
+ * Trigger or dismiss simulated SOS (backward compatible helper).
+ */
+export async function triggerMockSOS(childId, active = true) {
+  if (active) {
+    return await triggerChildSOS(childId, 'simulator');
+  } else {
+    return await resolveChildSOS(childId);
+  }
+}
+
+// ============================================================================
+// PET & ITEM TRACKING METHODS (SRS FR-5.1–FR-5.4)
+//
+// NOTE: Per SRS Sections 1.2 & 3.6, BLE hardware/ESP32 tag integration is an
+// optional Phase 2 stretch requirement. The following methods provide UI-only
+// simulation stubs without real BLE hardware libraries to comply with the SRS.
+// ============================================================================
 
 export async function getPetsAndItems(ownerUid = 'parent_user_default') {
   return await getStoredPetsItems();
 }
 
-export async function addPetOrItem(ownerUid = 'parent_user_default', data) {
+/**
+ * Simulated add pet or item tag.
+ */
+export async function simulateAddPetOrItem(ownerUid = 'parent_user_default', data) {
   if (!data?.name?.trim()) throw new Error('Please enter name');
 
   const newItem = {
@@ -1002,7 +1185,7 @@ export async function addPetOrItem(ownerUid = 'parent_user_default', data) {
     rssi: -58,
     distanceEstimate: '~2.0m away',
     lastSeen: 'Just now',
-    locationAddress: 'Nearby (BLE Broadcast)',
+    locationAddress: 'Nearby (Simulated BLE Beacon)',
     isRinging: false,
   };
 
@@ -1012,10 +1195,13 @@ export async function addPetOrItem(ownerUid = 'parent_user_default', data) {
   return newItem;
 }
 
-export async function toggleBleProximity(itemId) {
+/**
+ * Simulated BLE Proximity toggle (In-Range vs Out-of-Range).
+ */
+export async function simulateToggleBleProximity(itemId) {
   const items = await getStoredPetsItems();
   const index = items.findIndex((i) => i.id === itemId);
-  if (index === -1) return;
+  if (index === -1) return null;
 
   const item = items[index];
   const newStatus = item.status === 'in_range' ? 'out_of_range' : 'in_range';
@@ -1029,10 +1215,13 @@ export async function toggleBleProximity(itemId) {
   return item;
 }
 
-export async function pingBleTag(itemId) {
+/**
+ * Simulated audible buzzer ping on BLE tag.
+ */
+export async function simulatePingBleTag(itemId) {
   const items = await getStoredPetsItems();
   const index = items.findIndex((i) => i.id === itemId);
-  if (index === -1) return;
+  if (index === -1) return null;
 
   items[index].isRinging = true;
   await saveStoredPetsItems(items);
@@ -1053,3 +1242,20 @@ export async function pingBleTag(itemId) {
 
   return items[index];
 }
+
+/**
+ * Simulated remove pet/item tag.
+ */
+export async function simulateDeletePetOrItem(itemId) {
+  const items = await getStoredPetsItems();
+  const filtered = items.filter((i) => i.id !== itemId);
+  await saveStoredPetsItems(filtered);
+  return true;
+}
+
+// Aliases for backward compatibility
+export const addPetOrItem = simulateAddPetOrItem;
+export const toggleBleProximity = simulateToggleBleProximity;
+export const pingBleTag = simulatePingBleTag;
+export const deletePetOrItem = simulateDeletePetOrItem;
+

@@ -17,12 +17,14 @@ import {
   getPetsAndItems,
   triggerMockSOS,
   resolveChildSOS,
+  unlinkChild,
   USE_MOCK_DATA,
 } from '../../services/parentChildService';
 
 import ChildCard from '../../components/parentchild/ChildCard';
 import UrgentSOSBanner from '../../components/parentchild/UrgentSOSBanner';
 import AddChildModal from '../../components/parentchild/AddChildModal';
+import ChildDeviceModal from '../../components/parentchild/ChildDeviceModal';
 import PetItemSection from '../../components/parentchild/PetItemSection';
 
 export default function ParentDashboardScreen() {
@@ -33,6 +35,8 @@ export default function ParentDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [childDeviceVisible, setChildDeviceVisible] = useState(false);
+  const [selectedDeviceChild, setSelectedDeviceChild] = useState(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -53,6 +57,14 @@ export default function ParentDashboardScreen() {
     }, [loadData])
   );
 
+  // Periodic polling every 4 seconds to sync live child location, check-ins, and SOS alerts
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
   async function handleRefresh() {
     setRefreshing(true);
     await loadData();
@@ -70,6 +82,30 @@ export default function ParentDashboardScreen() {
     } else {
       Alert.alert('✅ SOS Resolved', `Emergency alert for ${child.targetName} marked as safe.`);
     }
+  }
+
+  function handleOpenChildDevice(child) {
+    setSelectedDeviceChild(child);
+    setChildDeviceVisible(true);
+  }
+
+  function handleUnlinkChild(child) {
+    Alert.alert(
+      'Unlink Child',
+      `Are you sure you want to unlink ${child.targetName} from your GuardianCircle? Location tracking and SOS routing will stop.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlink',
+          style: 'destructive',
+          onPress: async () => {
+            await unlinkChild(child.id);
+            await loadData();
+            Alert.alert('Unlinked', `${child.targetName} has been unlinked.`);
+          },
+        },
+      ]
+    );
   }
 
   const activeSOSChild = childrenList.find((c) => c.sosActive);
@@ -202,6 +238,8 @@ export default function ParentDashboardScreen() {
               onNavigateHistory={() =>
                 navigation.navigate(ROUTES.CHILD_HISTORY, { childId: child.id })
               }
+              onOpenChildDevice={() => handleOpenChildDevice(child)}
+              onUnlink={() => handleUnlinkChild(child)}
               onToggleSOS={() => handleToggleSOS(child)}
             />
           ))
@@ -219,6 +257,18 @@ export default function ParentDashboardScreen() {
           loadData();
           Alert.alert('✅ Child Added', `${newChild.targetName} is now linked to your GuardianCircle.`);
         }}
+      />
+
+      {/* Child Device Interface Modal for Child-Side Flow (FR-4.4) */}
+      <ChildDeviceModal
+        visible={childDeviceVisible}
+        child={selectedDeviceChild}
+        onClose={() => {
+          setChildDeviceVisible(false);
+          setSelectedDeviceChild(null);
+          loadData();
+        }}
+        onStateChange={loadData}
       />
     </View>
   );

@@ -18,6 +18,7 @@ import {
   saveSafeZone,
   deleteSafeZone,
   calculateDistance,
+  updateChildLocation,
 } from '../../services/parentChildService';
 
 const ZONE_PRESETS = [
@@ -69,8 +70,60 @@ export default function SafeZonesScreen() {
     loadData();
   }, [loadData]);
 
+  // Periodic polling every 4 seconds to sync geofence status
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
   const activeChild =
     childrenList.find((c) => c.id === selectedChildId) || childrenList[0] || null;
+
+  async function handleTestGeofenceCrossing(zone) {
+    if (!activeChild) return;
+    const dist = calculateDistance(
+      activeChild.lastLocation?.latitude,
+      activeChild.lastLocation?.longitude,
+      zone.latitude,
+      zone.longitude
+    );
+    const isCurrentlyInside = dist <= (zone.radius || 200);
+
+    let newCoords;
+    if (isCurrentlyInside) {
+      // Place child 500 meters away outside the zone
+      newCoords = {
+        latitude: zone.latitude + 0.005,
+        longitude: zone.longitude + 0.005,
+      };
+    } else {
+      // Place child right in the center of the safe zone
+      newCoords = {
+        latitude: zone.latitude,
+        longitude: zone.longitude,
+      };
+    }
+
+    const updated = await updateChildLocation(
+      activeChild.id,
+      newCoords,
+      `${zone.name} Sector Area`
+    );
+
+    await loadData();
+    const transitions = updated?.transitionSummary;
+    let transitionMsg = `Child moved to ${isCurrentlyInside ? 'outside' : 'inside'} "${zone.name}". Status: "${updated?.currentZoneName}".`;
+    if (transitions?.entered?.length > 0) {
+      transitionMsg += `\n\n🟢 ENTERED: ${transitions.entered.join(', ')}`;
+    }
+    if (transitions?.exited?.length > 0) {
+      transitionMsg += `\n\n🟡 EXITED: ${transitions.exited.join(', ')}`;
+    }
+
+    Alert.alert('🛡️ Boundary Crossing Evaluated', transitionMsg);
+  }
 
   function selectPreset(preset) {
     setZoneName(preset.name);
@@ -281,6 +334,13 @@ export default function SafeZonesScreen() {
                       <Text style={styles.tagItemText}>🚪 Notify on Exit</Text>
                     </View>
                   )}
+                  <TouchableOpacity
+                    style={[styles.deleteZoneBtn, { backgroundColor: '#E0F2FE', marginRight: 6 }]}
+                    onPress={() => handleTestGeofenceCrossing(zone)}
+                  >
+                    <Text style={[styles.deleteZoneText, { color: '#0284C7' }]}>🚶 Test Crossing</Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.deleteZoneBtn}
                     onPress={() => handleDeleteZone(zone)}
