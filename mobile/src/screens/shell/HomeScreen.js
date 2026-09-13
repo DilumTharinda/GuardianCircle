@@ -13,7 +13,7 @@ export default function HomeScreen() {
   const { userProfile } = useAuth();
 
   const childMode = userProfile && isChild(userProfile.role);
-  const isParent = userProfile?.role === ROLES.PARENT_GUARDIAN;
+  const isParent = !userProfile || userProfile?.role === ROLES.PARENT_GUARDIAN || userProfile?.role === ROLES.PRIMARY_USER;
 
   function handleSOSTap() {
     Vibration.vibrate(100);

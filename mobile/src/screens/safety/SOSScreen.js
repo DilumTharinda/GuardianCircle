@@ -1,16 +1,33 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Text, Pressable } from 'react-native';
+import SosButton from '../../components/SosButton';
+import { useShakeSOS } from '../../hooks/useShakeSOS';
 
 export default function SOSScreen() {
+  const [cancelFn, setCancelFn] = useState(null);
+
+  useShakeSOS((cancel) => setCancelFn(() => cancel));
+
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Safety & SOS</Text>
-      <Text style={styles.sub}>Member 2 builds this screen</Text>
+      <SosButton />
+      {cancelFn && (
+        <Pressable
+          style={styles.cancelButton}
+          onPress={() => {
+            cancelFn();
+            setCancelFn(null);
+          }}
+        >
+          <Text style={styles.cancelText}>Shake detected — Cancel SOS</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  text: { fontSize: 22, fontWeight: 'bold', color: '#E53935' },
-  sub: { fontSize: 13, color: '#888', marginTop: 8 },
+  cancelButton: { marginTop: 24, backgroundColor: '#333', padding: 16, borderRadius: 8 },
+  cancelText: { color: '#fff', fontWeight: 'bold' },
 });

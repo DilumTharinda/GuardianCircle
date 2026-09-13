@@ -8,7 +8,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigation = useNavigation();
-  const { login } = useAuth();
+  const { login, loginAsDemoParent } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,7 +20,11 @@ export default function LoginScreen() {
     } catch (error) {
       let friendlyMessage = 'An unexpected error occurred. Please try again.';
 
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+      if (
+        error.code === 'auth/invalid-credential' ||
+        error.code === 'auth/user-not-found' ||
+        error.code === 'auth/wrong-password'
+      ) {
         friendlyMessage = 'Invalid email or password. Please check your credentials.';
       } else if (error.code === 'auth/too-many-requests') {
         friendlyMessage = 'Too many failed login attempts. Please try again later.';
@@ -32,15 +36,37 @@ export default function LoginScreen() {
     }
   };
 
+  const handleDemoLogin = async () => {
+    if (loginAsDemoParent) {
+      await loginAsDemoParent();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>GuardianCircle</Text>
-      <Text style={styles.subtitle}>Sign in to your account</Text>
+      <Text style={styles.subtitle}>Personal Safety & Family Guardian</Text>
+
+      {/* 1-Tap Offline Test Button */}
+      <TouchableOpacity style={styles.demoButton} onPress={handleDemoLogin} activeOpacity={0.85}>
+        <Text style={styles.demoButtonEmoji}>🛡️</Text>
+        <View style={styles.demoTextCol}>
+          <Text style={styles.demoButtonText}>Test as Parent Guardian</Text>
+          <Text style={styles.demoButtonSub}>1-Tap Offline Demo (Zero Quota)</Text>
+        </View>
+      </TouchableOpacity>
+
+      <View style={styles.dividerRow}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or sign in with credentials</Text>
+        <View style={styles.dividerLine} />
+      </View>
 
       <View style={styles.form}>
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor="#9E9E9E"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -49,11 +75,12 @@ export default function LoginScreen() {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#9E9E9E"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
         />
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
+        <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.8}>
           <Text style={styles.buttonText}>Login</Text>
         </TouchableOpacity>
       </View>
@@ -73,56 +100,100 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#E53935',
     textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 28,
+  },
+  demoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1.5,
+    borderColor: '#2E7D32',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  demoButtonEmoji: {
+    fontSize: 28,
+  },
+  demoTextCol: {
+    flex: 1,
+  },
+  demoButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
+  demoButtonSub: {
+    fontSize: 12,
+    color: '#388E3C',
+    marginTop: 2,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E0E0E0',
+  },
+  dividerText: {
+    fontSize: 12,
+    color: '#9E9E9E',
   },
   form: {
-    gap: 15,
+    gap: 12,
   },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
-    padding: 15,
+    padding: 14,
     borderRadius: 10,
-    fontSize: 16,
+    fontSize: 15,
+    backgroundColor: '#FAFAFA',
+    color: '#212121',
   },
   button: {
     backgroundColor: '#E53935',
-    padding: 15,
+    padding: 14,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 8,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 25,
+    marginTop: 24,
   },
   footerText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#666',
   },
   linkText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#E53935',
     fontWeight: 'bold',
   },
 });
-
