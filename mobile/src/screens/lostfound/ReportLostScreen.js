@@ -10,6 +10,8 @@ import {
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import ngeohash from 'ngeohash';
 
 const CATEGORIES = ['Electronics', 'Documents', 'Pet', 'Bag', 'Jewelry', 'Other'];
 
@@ -17,6 +19,8 @@ export default function ReportLostScreen({ navigation }) {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [photoUri, setPhotoUri] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   async function pickImage() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -36,6 +40,37 @@ export default function ReportLostScreen({ navigation }) {
 
     if (!result.canceled) {
       setPhotoUri(result.assets[0].uri);
+    }
+  }
+
+  async function getCurrentLocation() {
+    setGettingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission needed',
+          'Location permission is required to tag the item.'
+        );
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({});
+      const geohash = ngeohash.encode(
+        loc.coords.latitude,
+        loc.coords.longitude
+      );
+
+      setLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        geohash,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Could not get your location. Please try again.');
+    } finally {
+      setGettingLocation(false);
     }
   }
 
@@ -86,8 +121,14 @@ export default function ReportLostScreen({ navigation }) {
       </TouchableOpacity>
 
       <Text style={styles.label}>Last Known Location</Text>
-      <TouchableOpacity style={styles.locationBox}>
-        <Text style={styles.locationBoxText}>📍 Tap to set location</Text>
+      <TouchableOpacity style={styles.locationBox} onPress={getCurrentLocation}>
+        <Text style={styles.locationBoxText}>
+          {gettingLocation
+            ? 'Getting location...'
+            : location
+            ? `📍 ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
+            : '📍 Tap to set location'}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.submitButton}>
