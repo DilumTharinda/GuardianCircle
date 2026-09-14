@@ -6,13 +6,38 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 const CATEGORIES = ['Electronics', 'Documents', 'Pet', 'Bag', 'Jewelry', 'Other'];
 
 export default function ReportLostScreen({ navigation }) {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  const [photoUri, setPhotoUri] = useState(null);
+
+  async function pickImage() {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        'Permission needed',
+        'We need access to your photos to attach an image.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -52,8 +77,12 @@ export default function ReportLostScreen({ navigation }) {
       />
 
       <Text style={styles.label}>Photo</Text>
-      <TouchableOpacity style={styles.photoBox}>
-        <Text style={styles.photoBoxText}>+ Add Photo</Text>
+      <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+        ) : (
+          <Text style={styles.photoBoxText}>+ Add Photo</Text>
+        )}
       </TouchableOpacity>
 
       <Text style={styles.label}>Last Known Location</Text>
@@ -104,8 +133,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f9f9f9',
+    overflow: 'hidden',
   },
   photoBoxText: { color: '#999', fontSize: 15 },
+  photoPreview: { width: '100%', height: '100%', borderRadius: 12 },
   locationBox: {
     padding: 14,
     borderWidth: 1,
