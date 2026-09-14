@@ -8,19 +8,26 @@ import {
   ScrollView,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import ngeohash from 'ngeohash';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { uploadImage } from '../../services/cloudinaryService';
+import { useAuth } from '../../context/AuthContext';
 
 const CATEGORIES = ['Electronics', 'Documents', 'Pet', 'Bag', 'Jewelry', 'Other'];
 
 export default function ReportLostScreen({ navigation }) {
+  const { user } = useAuth();
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [photoUri, setPhotoUri] = useState(null);
   const [location, setLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function pickImage() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -34,7 +41,7 @@ export default function ReportLostScreen({ navigation }) {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.5,
     });
 
@@ -71,6 +78,48 @@ export default function ReportLostScreen({ navigation }) {
       Alert.alert('Error', 'Could not get your location. Please try again.');
     } finally {
       setGettingLocation(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!category || !description || !location) {
+      Alert.alert(
+        'Missing information',
+        'Please fill in category, description, and location.'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let photoUrl = null;
+      if (photoUri) {
+        const uploadResult = await uploadImage(photoUri, 'lost-items');
+        photoUrl = uploadResult.url;
+      }
+
+      await addDoc(collection(db, 'reports'), {
+        type: 'lost',
+        category,
+        description,
+        photoUrl,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+        geohash: location.geohash,
+        status: 'lost',
+        reportedBy: user.uid,
+        confidenceScore: 0,
+        createdAt: serverTimestamp(),
+      });
+
+      Alert.alert('Success', 'Your report has been submitted.');
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -131,8 +180,16 @@ export default function ReportLostScreen({ navigation }) {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.submitButton}>
-        <Text style={styles.submitButtonText}>Submit Report</Text>
+      <TouchableOpacity
+        style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+        onPress={handleSubmit}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.submitButtonText}>Submit Report</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -193,5 +250,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 30,
   },
+  submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
