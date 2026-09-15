@@ -89,10 +89,25 @@ export const RADIUS = {
   full: 9999,
 };
 
+export const FONTS = {
+  xs: 10,
+  sm: 12,
+  base: 14,
+  md: 16,
+  lg: 18,
+  xl: 24,
+  xxl: 28,
+  regular: '400',
+  medium: '500',
+  semiBold: '600',
+  bold: '700',
+};
+
 export default {
   COLORS,
   SPACING,
   TYPOGRAPHY,
   SHADOWS,
   RADIUS,
+  FONTS,
 };
