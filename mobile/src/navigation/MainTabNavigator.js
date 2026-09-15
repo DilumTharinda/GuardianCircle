@@ -9,7 +9,7 @@ import { ROUTES } from '../constants/routes';
 import HomeScreen from '../screens/shell/HomeScreen';
 import SOSScreen from '../screens/safety/SOSScreen';
 import MapScreen from '../screens/journey/MapScreen';
-import LostFoundScreen from '../screens/lostfound/LostFoundScreen';
+import LostFoundNavigator from './LostFoundNavigator';
 import ProfileScreen from '../screens/account/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
@@ -70,8 +70,8 @@ export default function MainTabNavigator() {
       )}
       <Tab.Screen
         name={ROUTES.LOST_FOUND}
-        component={LostFoundScreen}
-        options={{ title: 'Lost & Found', tabBarLabel: 'Lost & Found' }}
+        component={LostFoundNavigator}
+        options={{ title: 'Lost & Found', tabBarLabel: 'Lost & Found', headerShown: false }}
       />
       <Tab.Screen
         name={ROUTES.PROFILE}
