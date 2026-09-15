@@ -6,13 +6,122 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
+import ngeohash from 'ngeohash';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { uploadImage } from '../../services/cloudinaryService';
+import { useAuth } from '../../context/AuthContext';
 
 const CATEGORIES = ['Electronics', 'Documents', 'Pet', 'Bag', 'Jewelry', 'Other'];
 
 export default function ReportLostScreen({ navigation }) {
+  const { user } = useAuth();
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  const [photoUri, setPhotoUri] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function pickImage() {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert(
+        'Permission needed',
+        'We need access to your photos to attach an image.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
+
+  async function getCurrentLocation() {
+    setGettingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission needed',
+          'Location permission is required to tag the item.'
+        );
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({});
+      const geohash = ngeohash.encode(
+        loc.coords.latitude,
+        loc.coords.longitude
+      );
+
+      setLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        geohash,
+      });
+    } catch (error) {
+      Alert.alert('Error', 'Could not get your location. Please try again.');
+    } finally {
+      setGettingLocation(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!category || !description || !location) {
+      Alert.alert(
+        'Missing information',
+        'Please fill in category, description, and location.'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let photoUrl = null;
+      if (photoUri) {
+        const uploadResult = await uploadImage(photoUri, 'lost-items');
+        photoUrl = uploadResult.url;
+      }
+
+      await addDoc(collection(db, 'reports'), {
+        type: 'lost',
+        category,
+        description,
+        photoUrl,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+        geohash: location.geohash,
+        status: 'lost',
+        reportedBy: user.uid,
+        confidenceScore: 0,
+        createdAt: serverTimestamp(),
+      });
+
+      Alert.alert('Success', 'Your report has been submitted.');
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -52,17 +161,35 @@ export default function ReportLostScreen({ navigation }) {
       />
 
       <Text style={styles.label}>Photo</Text>
-      <TouchableOpacity style={styles.photoBox}>
-        <Text style={styles.photoBoxText}>+ Add Photo</Text>
+      <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+        ) : (
+          <Text style={styles.photoBoxText}>+ Add Photo</Text>
+        )}
       </TouchableOpacity>
 
       <Text style={styles.label}>Last Known Location</Text>
-      <TouchableOpacity style={styles.locationBox}>
-        <Text style={styles.locationBoxText}>📍 Tap to set location</Text>
+      <TouchableOpacity style={styles.locationBox} onPress={getCurrentLocation}>
+        <Text style={styles.locationBoxText}>
+          {gettingLocation
+            ? 'Getting location...'
+            : location
+            ? `📍 ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
+            : '📍 Tap to set location'}
+        </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.submitButton}>
-        <Text style={styles.submitButtonText}>Submit Report</Text>
+      <TouchableOpacity
+        style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+        onPress={handleSubmit}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.submitButtonText}>Submit Report</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -104,8 +231,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f9f9f9',
+    overflow: 'hidden',
   },
   photoBoxText: { color: '#999', fontSize: 15 },
+  photoPreview: { width: '100%', height: '100%', borderRadius: 12 },
   locationBox: {
     padding: 14,
     borderWidth: 1,
@@ -121,5 +250,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 30,
   },
+  submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

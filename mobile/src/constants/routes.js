@@ -27,6 +27,7 @@ export const ROUTES = {
   UNSAFE_REPORT: 'UnsafeReport',
 
   // Lost & Found sub-screens (Member 4)
+  LOST_FOUND_LIST: 'LostFoundList',
   REPORT_LOST: 'ReportLost',
   REPORT_FOUND: 'ReportFound',
   LOST_FOUND_DETAIL: 'LostFoundDetail',
