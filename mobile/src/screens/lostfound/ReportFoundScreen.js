@@ -15,15 +15,22 @@ import * as Location from 'expo-location';
 import ngeohash from 'ngeohash';
 import {
   collection,
+  addDoc,
+  doc,
+  updateDoc,
   query,
   where,
   orderBy,
   limit,
   getDocs,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { uploadImage } from '../../services/cloudinaryService';
+import { useAuth } from '../../context/AuthContext';
 
 export default function ReportFoundScreen({ navigation }) {
+  const { user } = useAuth();
   const [description, setDescription] = useState('');
   const [photoUri, setPhotoUri] = useState(null);
   const [location, setLocation] = useState(null);
@@ -32,6 +39,7 @@ export default function ReportFoundScreen({ navigation }) {
   const [selectedLostReport, setSelectedLostReport] = useState(null);
   const [lostReports, setLostReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function pickImage() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -116,6 +124,65 @@ export default function ReportFoundScreen({ navigation }) {
     }
   }
 
+  async function handleSubmit() {
+    if (!description || !location) {
+      Alert.alert(
+        'Missing information',
+        'Please fill in a description and location.'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      let photoUrl = null;
+      if (photoUri) {
+        const uploadResult = await uploadImage(photoUri, 'found-items');
+        photoUrl = uploadResult.url;
+      }
+
+      // 1. Create the found/sighting report
+      const foundReportRef = await addDoc(collection(db, 'reports'), {
+        type: 'found',
+        description,
+        photoUrl,
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+        },
+        geohash: location.geohash,
+        status: 'sighted',
+        reportedBy: user.uid,
+        confidenceScore: 0,
+        createdAt: serverTimestamp(),
+      });
+
+      // 2. If linked to a specific lost report, create a match record
+      //    and update the lost report's status so the original reporter sees it.
+      //    (Actual push notification to the reporter is handled by the
+      //    team's FCM/notifications setup, not by this screen directly.)
+      if (isLinkedToLost && selectedLostReport) {
+        await addDoc(collection(db, 'matches'), {
+          lostReportId: selectedLostReport.id,
+          foundReportId: foundReportRef.id,
+          status: 'suggested',
+          createdAt: serverTimestamp(),
+        });
+
+        await updateDoc(doc(db, 'reports', selectedLostReport.id), {
+          status: 'sighted',
+        });
+      }
+
+      Alert.alert('Success', 'Your found item report has been submitted.');
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Report a Found Item</Text>
@@ -185,8 +252,16 @@ export default function ReportFoundScreen({ navigation }) {
         </View>
       )}
 
-      <TouchableOpacity style={styles.submitButton}>
-        <Text style={styles.submitButtonText}>Submit Found Report</Text>
+      <TouchableOpacity
+        style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+        onPress={handleSubmit}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.submitButtonText}>Submit Found Report</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -265,5 +340,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 30,
   },
+  submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
