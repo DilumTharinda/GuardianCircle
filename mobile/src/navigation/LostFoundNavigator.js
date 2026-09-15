@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ROUTES } from '../constants/routes';
 import LostFoundScreen from '../screens/lostfound/LostFoundScreen';
 import ReportLostScreen from '../screens/lostfound/ReportLostScreen';
+import ReportFoundScreen from '../screens/lostfound/ReportFoundScreen';
 
 const Stack = createStackNavigator();
 
@@ -24,6 +25,11 @@ export default function LostFoundNavigator() {
         name={ROUTES.REPORT_LOST}
         component={ReportLostScreen}
         options={{ title: 'Report Lost Item' }}
+      />
+      <Stack.Screen
+        name={ROUTES.REPORT_FOUND}
+        component={ReportFoundScreen}
+        options={{ title: 'Report Found Item' }}
       />
     </Stack.Navigator>
   );

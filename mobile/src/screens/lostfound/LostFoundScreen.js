@@ -15,6 +15,13 @@ export default function LostFoundScreen({ navigation }) {
         <Text style={styles.reportButtonText}>+ Report Lost Item</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={styles.foundButton}
+        onPress={() => navigation.navigate(ROUTES.REPORT_FOUND)}
+      >
+        <Text style={styles.foundButtonText}>+ Report Found Item</Text>
+      </TouchableOpacity>
+
       <View style={styles.placeholder}>
         <Text style={styles.placeholderText}>Items list will be displayed here</Text>
       </View>
@@ -47,9 +54,17 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   reportButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  foundButton: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  foundButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   placeholder: {
     width: '100%',
     height: 200,
