@@ -17,13 +17,11 @@ export async function uploadImage(localUri, folder = 'general') {
   });
   formData.append('upload_preset', UPLOAD_PRESET);
   formData.append('folder', `guardiancircle/${folder}`);
-  // Quality transformation to stay within free-tier bandwidth
-  formData.append('transformation', 'q_auto:eco,w_800,c_limit');
+  
 
   const response = await fetch(UPLOAD_URL, {
     method: 'POST',
     body: formData,
-    headers: { 'Content-Type': 'multipart/form-data' },
   });
 
   if (!response.ok) {

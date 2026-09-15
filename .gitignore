@@ -2,5 +2,3 @@ scripts/serviceAccountKey.json
 scripts/node_modules/
 scripts/.env.bootstrap
 node_modules/
-
-#test
