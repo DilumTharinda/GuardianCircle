@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator, Linking, Platform, StyleSheet, Text, TouchableOpacity, View,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { getForegroundLocationSnapshot } from '../../services/locationService';
 
 let MapView = null;
+let Marker = null;
 let PROVIDER_GOOGLE = null;
 
 if (Platform.OS !== 'web') {
   try {
     const Maps = require('react-native-maps');
     MapView = Maps.default || Maps;
+    Marker = Maps.Marker;
     PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
   } catch (e) {
     console.warn('[MapScreen] react-native-maps not loaded, using fallback');
@@ -15,47 +21,131 @@ if (Platform.OS !== 'web') {
 }
 
 export default function MapScreen() {
-  const [journeyActive, setJourneyActive] = useState(false);
+  const [locationState, setLocationState] = useState({ status: 'loading' });
+  const requestId = useRef(0);
+  const mapAvailable = MapView && Marker && Platform.OS !== 'web';
+
+  const loadLocation = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    setLocationState({ status: 'loading' });
+
+    const result = await getForegroundLocationSnapshot();
+    // Ignore results after blur/unmount, or after a newer request has started.
+    if (currentRequest === requestId.current) {
+      setLocationState(result);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!mapAvailable) return;
+
+      loadLocation();
+      return () => {
+        requestId.current += 1;
+      };
+    }, [loadLocation, mapAvailable])
+  );
+
+  async function openSettings() {
+    const currentRequest = requestId.current;
+    try {
+      await Linking.openSettings();
+    } catch (error) {
+      if (currentRequest === requestId.current) {
+        setLocationState((previous) => ({
+          ...previous,
+          message: 'Could not open Settings. Open your device settings manually, allow location access, then tap Retry.',
+        }));
+      }
+    }
+  }
+
+  if (!mapAvailable) {
+    return (
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusTitle}>Map unavailable</Text>
+        <Text style={styles.statusMessage}>
+          Open this screen in a supported Android or iOS app to view the map.
+        </Text>
+      </View>
+    );
+  }
+
+  if (locationState.status !== 'success') {
+    const loading = locationState.status === 'loading';
+    const permissionDenied = locationState.status === 'permission-denied';
+    const title = permissionDenied
+      ? 'Location permission needed'
+      : locationState.status === 'services-disabled'
+        ? 'Location services are off'
+        : 'Location unavailable';
+
+    return (
+      <View style={styles.statusContainer} accessibilityLiveRegion="polite">
+        {loading ? (
+          <>
+            <ActivityIndicator size="large" color="#E53935" />
+            <Text style={styles.loadingText}>Getting your location...</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.statusTitle}>{title}</Text>
+            <Text style={styles.statusMessage}>{locationState.message}</Text>
+            {permissionDenied && locationState.canAskAgain === false && (
+              <TouchableOpacity
+                style={styles.button}
+                onPress={openSettings}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+              >
+                <Text style={styles.buttonText}>Open Settings</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.button}
+              onPress={loadLocation}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Text style={styles.buttonText}>Retry</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    );
+  }
+
+  const { latitude, longitude, accuracy, timestamp } = locationState;
 
   return (
     <View style={styles.container}>
-      {MapView && Platform.OS !== 'web' ? (
-        <MapView
-          provider={PROVIDER_GOOGLE}
-          style={styles.map}
-          initialRegion={{
-            latitude: 6.9271, // Colombo, Sri Lanka
-            longitude: 79.8612,
-            latitudeDelta: 0.05,
-            longitudeDelta: 0.05,
-          }}
+      {/* Mount after GPS succeeds so initialRegion uses this snapshot. */}
+      <MapView
+        provider={PROVIDER_GOOGLE}
+        style={styles.map}
+        initialRegion={{
+          latitude,
+          longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+      >
+        <Marker
+          coordinate={{ latitude, longitude }}
+          title="Your current location"
+          description="One-time location snapshot"
         />
-      ) : (
-        <View style={styles.fallbackContainer}>
-          <Text style={styles.fallbackEmoji}>🗺️</Text>
-          <Text style={styles.fallbackTitle}>Live Journey & Safe Routes (Sri Lanka)</Text>
-          <Text style={styles.fallbackSub}>
-            Tracking active along Colombo 05 ➔ Colombo 10 (Galle Road / High-Level Corridor)
-          </Text>
-          <View style={styles.routeCard}>
-            <Text style={styles.routeItem}>🟢 Start: Havelock Town, Colombo 05</Text>
-            <Text style={styles.routeItem}>📍 Checkpoint: Bambalapitiya Police Zone</Text>
-            <Text style={styles.routeItem}>🏁 Destination: Ananda College, Colombo 10</Text>
-          </View>
-        </View>
-      )}
+      </MapView>
 
       <View style={styles.overlay}>
-        <Text style={styles.text}>🇱🇰 Live Journey Tracking</Text>
-        <TouchableOpacity
-          style={[styles.journeyBtn, journeyActive && styles.journeyBtnActive]}
-          onPress={() => setJourneyActive(!journeyActive)}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.journeyBtnText}>
-            {journeyActive ? '⏹️ End Active Trip' : '🚀 Start Safe Journey'}
-          </Text>
-        </TouchableOpacity>
+        <Text style={styles.text}>Current location</Text>
+        <Text style={styles.snapshotText}>
+          Captured at {new Date(timestamp).toLocaleTimeString()}
+        </Text>
+        {accuracy !== null && (
+          <Text style={styles.snapshotText}>Accuracy: about {Math.round(accuracy)} m</Text>
+        )}
       </View>
     </View>
   );
@@ -64,41 +154,45 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFAFA' },
   map: { flex: 1 },
-  fallbackContainer: {
+  statusContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
     backgroundColor: '#F8F9FA',
   },
-  fallbackEmoji: { fontSize: 48, marginBottom: 12 },
-  fallbackTitle: {
+  statusTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#212121',
     textAlign: 'center',
     marginBottom: 8,
   },
-  fallbackSub: {
-    fontSize: 13,
+  statusMessage: {
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
     marginBottom: 20,
-    lineHeight: 18,
+    lineHeight: 20,
   },
-  routeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    gap: 8,
+  loadingText: {
+    fontSize: 16,
+    color: '#424242',
+    marginTop: 16,
+    textAlign: 'center',
   },
-  routeItem: {
-    fontSize: 13,
-    color: '#333',
-    fontWeight: '500',
+  button: {
+    backgroundColor: '#2E7D32',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   overlay: {
     position: 'absolute',
@@ -114,23 +208,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
-    gap: 10,
+    gap: 8,
   },
   text: { fontSize: 16, fontWeight: 'bold', color: '#E53935' },
-  journeyBtn: {
-    backgroundColor: '#2E7D32',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  journeyBtnActive: {
-    backgroundColor: '#C62828',
-  },
-  journeyBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
+  snapshotText: { fontSize: 13, color: '#424242', textAlign: 'center' },
 });

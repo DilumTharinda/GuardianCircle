@@ -1,6 +1,78 @@
 import * as Location from 'expo-location';
 
 /**
+ * Gets one foreground location snapshot without using fallback coordinates.
+ * Success includes latitude, longitude, accuracy (or null), and timestamp.
+ * Failures have a status/message; permission denial also includes canAskAgain.
+ */
+export async function getForegroundLocationSnapshot() {
+  let timeoutId;
+
+  try {
+    let permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted' && permission.canAskAgain) {
+      permission = await Location.requestForegroundPermissionsAsync();
+    }
+
+    if (permission.status !== 'granted') {
+      return {
+        status: 'permission-denied',
+        canAskAgain: permission.canAskAgain,
+        message: permission.canAskAgain
+          ? 'Allow location access to show your position on the map, then tap Retry.'
+          : 'Allow location access in your app settings, then return here and tap Retry.',
+      };
+    }
+
+    if (!(await Location.hasServicesEnabledAsync())) {
+      return {
+        status: 'services-disabled',
+        message: 'Turn on location services in your device settings, then tap Retry.',
+      };
+    }
+
+    // Expo's one-shot API has no native timeout option. This bounds our wait;
+    // the native request may still finish later, but its result will be ignored.
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error('Location request timed out.');
+          error.code = 'LOCATION_TIMEOUT';
+          reject(error);
+        }, 15000);
+      }),
+    ]);
+
+    const { latitude, longitude, accuracy } = position?.coords ?? {};
+    if (
+      !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+      !Number.isFinite(position?.timestamp)
+    ) {
+      throw new Error('The device returned an invalid location.');
+    }
+
+    return {
+      status: 'success',
+      latitude,
+      longitude,
+      accuracy: Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null,
+      timestamp: position.timestamp,
+    };
+  } catch (error) {
+    return {
+      status: 'location-error',
+      message: error?.code === 'LOCATION_TIMEOUT'
+        ? 'Getting your location took too long. Try again in an open area.'
+        : 'Unable to get your current location. Please try again.',
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Default fallback coordinates: Colombo, Sri Lanka
  */
 export const DEFAULT_COORDS = {
