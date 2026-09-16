@@ -14,11 +14,11 @@ export const COLORS = {
   primaryMuted: 'rgba(229, 57, 53, 0.12)',
 
   // ── Dark Green UI Theme ──
-  darkGreen: '#1B5E20',        // Deep forest green — headers, CTAs
-  darkGreenMid: '#2E7D32',     // Mid green — active states, buttons
-  darkGreenLight: '#388E3C',   // Lighter accent green
-  darkGreenSurface: '#E8F5E9', // Tinted surface for cards / focus
-  darkGreenMuted: 'rgba(27, 94, 32, 0.12)',
+  darkGreen: '#06756A',        // Deep forest green — headers, CTAs
+  darkGreenMid: '#06756A',     // Mid green — active states, buttons
+  darkGreenLight: '#0A9B8D',   // Lighter accent green
+  darkGreenSurface: '#E0F2F1', // Tinted surface for cards / focus
+  darkGreenMuted: 'rgba(6, 117, 106, 0.12)',
 
   // ── Neutrals & Backgrounds ──
   background: '#F4F6F4',       // Slightly green-tinted off-white
@@ -143,11 +143,11 @@ export default {
 /** Light mode — default app colors */
 export const LIGHT_COLORS = {
   // Header / brand (dark green)
-  darkGreen: '#1B5E20',
-  darkGreenMid: '#2E7D32',
-  darkGreenLight: '#388E3C',
-  darkGreenSurface: '#E8F5E9',
-  darkGreenMuted: 'rgba(27, 94, 32, 0.12)',
+  darkGreen: '#06756A',
+  darkGreenMid: '#06756A',
+  darkGreenLight: '#0A9B8D',
+  darkGreenSurface: '#E0F2F1',
+  darkGreenMuted: 'rgba(6, 117, 106, 0.12)',
 
   // SOS / danger (red)
   primary: '#E53935',
@@ -195,11 +195,11 @@ export const LIGHT_COLORS = {
 /** Dark mode — dark-surface palette with same green brand */
 export const DARK_COLORS = {
   // Header / brand (same green — stays vivid on dark)
-  darkGreen: '#1B5E20',
-  darkGreenMid: '#43A047',   // Slightly lighter so it pops on dark surface
-  darkGreenLight: '#66BB6A',
-  darkGreenSurface: '#1A2E1A',
-  darkGreenMuted: 'rgba(67, 160, 71, 0.18)',
+  darkGreen: '#06756A',
+  darkGreenMid: '#06756A',   // Slightly lighter so it pops on dark surface
+  darkGreenLight: '#0A9B8D',
+  darkGreenSurface: '#032B27',
+  darkGreenMuted: 'rgba(6, 117, 106, 0.18)',
 
   // SOS / danger (unchanged)
   primary: '#EF5350',

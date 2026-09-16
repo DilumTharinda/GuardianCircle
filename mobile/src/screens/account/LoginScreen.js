@@ -26,6 +26,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -38,7 +39,7 @@ const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const navigation = useNavigation();
-  const { login } = useAuth();
+  const { login, loginWithGoogle, resetPassword } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -123,6 +124,19 @@ export default function LoginScreen() {
         message = 'Please enter a valid email address.';
       }
       setError(message);
+      shakeError();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleLogin() {
+    setError('');
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      setError('Google Sign-In failed. Please try again.');
       shakeError();
     } finally {
       setLoading(false);
@@ -269,7 +283,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Forgot password */}
-            <TouchableOpacity style={styles.forgotRow}>
+            <TouchableOpacity style={styles.forgotRow} onPress={() => navigation.navigate(ROUTES.FORGOT_PASSWORD)} disabled={loading}>
               <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
 
@@ -306,7 +320,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Google sign in */}
-            <TouchableOpacity style={styles.googleButton}>
+            <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} disabled={loading}>
               <Text style={styles.googleIcon}>G</Text>
               <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>

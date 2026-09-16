@@ -2,9 +2,10 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { isChild } from '../constants/roles';
+import { isChild, isParent } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
 import { COLORS } from '../constants/theme';
+import ThemeToggle from '../components/ThemeToggle';
 
 // Import screens
 import HomeScreen from '../screens/shell/HomeScreen';
@@ -12,6 +13,7 @@ import SOSScreen from '../screens/safety/SOSScreen';
 import MapScreen from '../screens/journey/MapScreen';
 import LostFoundNavigator from './LostFoundNavigator';
 import ProfileScreen from '../screens/account/ProfileScreen';
+import ParentDashboardScreen from '../screens/parentchild/ParentDashboardScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -27,6 +29,7 @@ const TAB_ICONS = {
 export default function MainTabNavigator() {
   const { userProfile } = useAuth();
   const childMode = userProfile && isChild(userProfile.role);
+  const parentMode = userProfile && isParent(userProfile.role);
 
   return (
     <Tab.Navigator
@@ -54,12 +57,17 @@ export default function MainTabNavigator() {
         headerStyle: { backgroundColor: COLORS.darkGreen },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
+        headerRight: () => <ThemeToggle style={{ marginRight: 15 }} iconColor="#fff" />,
       })}
     >
       <Tab.Screen
         name={ROUTES.HOME}
-        component={HomeScreen}
-        options={{ title: 'Home', tabBarLabel: 'Home', headerShown: false }}
+        component={parentMode ? ParentDashboardScreen : HomeScreen}
+        options={{ 
+          title: parentMode ? 'Family' : 'Home', 
+          tabBarLabel: parentMode ? 'Family' : 'Home', 
+          headerShown: parentMode ? true : false // Parent dashboard doesn't have a custom header, it uses the native one
+        }}
       />
       <Tab.Screen
         name={ROUTES.SAFETY}
