@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import AuthNavigator from './AuthNavigator';
 import MainTabNavigator from './MainTabNavigator';
 import { ROUTES } from '../constants/routes';
+import { COLORS } from '../constants/theme';
 
 // Parent-Child Module Screens (Member 5)
 import ParentDashboardScreen from '../screens/parentchild/ParentDashboardScreen';
@@ -20,8 +21,8 @@ export default function AppNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#E53935" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.darkGreenMid} />
       </View>
     );
   }
@@ -29,7 +30,7 @@ export default function AppNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#E53935' },
+        headerStyle: { backgroundColor: COLORS.darkGreen },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
         headerBackTitle: 'Back',
