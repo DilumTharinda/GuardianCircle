@@ -27,6 +27,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -72,7 +73,7 @@ function RoleIcon({ iconLib, icon, size, color }) {
 
 export default function RegisterScreen() {
   const navigation = useNavigation();
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
 
   // Form state
   const [step, setStep] = useState(1);
@@ -231,6 +232,20 @@ export default function RegisterScreen() {
     }
   }
 
+  async function handleGoogleLogin() {
+    setError('');
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+      // AppNavigator will auto-navigate on auth state change
+    } catch (err) {
+      setError('Google Sign-In failed. Please try again.');
+      shakeError();
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const headerHeightAnim = headerAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '28%'],
@@ -340,6 +355,19 @@ export default function RegisterScreen() {
                     />
                   </View>
                 </View>
+
+                {/* Divider */}
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {/* Google sign up */}
+                <TouchableOpacity style={styles.googleButton} onPress={handleGoogleLogin} disabled={loading}>
+                  <Text style={styles.googleIcon}>G</Text>
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -541,8 +569,8 @@ function RoleCard({ iconLib, icon, label, desc, selected, onPress }) {
 
     if (selected) {
       Animated.sequence([
-        Animated.timing(scaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, tension: 150, friction: 5, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: false }),
+        Animated.spring(scaleAnim, { toValue: 1, tension: 150, friction: 5, useNativeDriver: false }),
       ]).start();
     }
   }, [selected]);
@@ -817,6 +845,39 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.darkGreenMid,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Divider
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText: { fontSize: FONTS.sm, color: COLORS.textMuted },
+
+  // Google
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: RADIUS.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  googleIcon: {
+    fontSize: FONTS.md,
+    fontWeight: FONTS.bold,
+    color: '#4285F4',
+  },
+  googleButtonText: {
+    fontSize: FONTS.base,
+    fontWeight: FONTS.medium,
+    color: COLORS.textPrimary,
   },
 
   // Button

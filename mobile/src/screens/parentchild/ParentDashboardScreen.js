@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { ROUTES } from '../../constants/routes';
@@ -37,6 +39,25 @@ export default function ParentDashboardScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [childDeviceVisible, setChildDeviceVisible] = useState(false);
   const [selectedDeviceChild, setSelectedDeviceChild] = useState(null);
+
+  // Entrance Animations
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const loadData = useCallback(async () => {
     try {
@@ -124,6 +145,7 @@ export default function ParentDashboardScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         {/* Header Hero */}
         <View style={styles.headerHero}>
           <View style={styles.headerTop}>
@@ -142,8 +164,9 @@ export default function ParentDashboardScreen() {
 
           {/* Offline / Mock Mode Safety Badge */}
           <View style={styles.mockModeBadge}>
+            <Ionicons name={USE_MOCK_DATA ? "flask" : "cloud-done"} size={14} color={COLORS.safeGreen} style={{ marginRight: 4 }} />
             <Text style={styles.mockModeText}>
-              🛡️ {USE_MOCK_DATA ? 'Zero-Quota Offline Mode Active (Safe Testing)' : 'Connected to Firestore'}
+              {USE_MOCK_DATA ? 'Zero-Quota Offline Mode Active' : 'Live Firebase Connection Active'}
             </Text>
           </View>
         </View>
@@ -167,7 +190,7 @@ export default function ParentDashboardScreen() {
             onPress={() => navigation.navigate(ROUTES.CHILD_LOCATION)}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickEmoji}>🗺️</Text>
+            <Ionicons name="map-outline" size={28} color={COLORS.darkGreenMid} style={{ marginBottom: 6 }} />
             <Text style={styles.quickLabel}>Live Map</Text>
             <Text style={styles.quickSub}>GPS tracking</Text>
           </TouchableOpacity>
@@ -177,7 +200,7 @@ export default function ParentDashboardScreen() {
             onPress={() => navigation.navigate(ROUTES.SAFE_ZONES)}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickEmoji}>🛡️</Text>
+            <MaterialCommunityIcons name="shield-home-outline" size={28} color={COLORS.darkGreenMid} style={{ marginBottom: 6 }} />
             <Text style={styles.quickLabel}>Safe Zones</Text>
             <Text style={styles.quickSub}>Geofence rules</Text>
           </TouchableOpacity>
@@ -187,7 +210,7 @@ export default function ParentDashboardScreen() {
             onPress={() => navigation.navigate(ROUTES.CHILD_HISTORY)}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickEmoji}>📜</Text>
+            <Ionicons name="time-outline" size={28} color={COLORS.darkGreenMid} style={{ marginBottom: 6 }} />
             <Text style={styles.quickLabel}>History</Text>
             <Text style={styles.quickSub}>Daily timeline</Text>
           </TouchableOpacity>
@@ -208,7 +231,7 @@ export default function ParentDashboardScreen() {
           </View>
         ) : childrenList.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>👶</Text>
+            <Ionicons name="people-outline" size={48} color={COLORS.textMuted} style={{ marginBottom: 12 }} />
             <Text style={styles.emptyTitle}>No Children Linked Yet</Text>
             <Text style={styles.emptySub}>
               Link your child's phone with a 6-digit code or create a managed profile to monitor their location.
@@ -247,6 +270,7 @@ export default function ParentDashboardScreen() {
 
         {/* Stretch Feature: BLE Pet & Valuable Trackers */}
         <PetItemSection items={petsItemsList} onRefresh={loadData} />
+        </Animated.View>
       </ScrollView>
 
       {/* Add Child Modal */}
@@ -321,6 +345,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   mockModeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.safeGreenLight,
     paddingVertical: 6,
     paddingHorizontal: 10,

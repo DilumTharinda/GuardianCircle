@@ -37,3 +37,10 @@ export function isAdmin(role) {
 export function isChild(role) {
   return role === ROLES.CHILD_DEPENDENT;
 }
+
+/**
+ * Check if a role is a parent/guardian.
+ */
+export function isParent(role) {
+  return role === ROLES.PARENT_GUARDIAN;
+}

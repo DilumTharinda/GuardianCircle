@@ -8,7 +8,7 @@
  *  3. Logout button presses down
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,14 @@ import {
   Animated,
   StatusBar,
   Platform,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import ThemeToggle from '../../components/ThemeToggle';
 
 function formatRole(role) {
   if (!role) return 'User';
@@ -98,13 +100,21 @@ export default function ProfileScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
+            <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 50 : 30, right: 15 }}>
+              <ThemeToggle iconColor="#fff" />
+            </View>
+
             {/* Avatar */}
             <Animated.View
               style={[styles.avatarWrapper, { transform: [{ scale: avatarScale }] }]}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initial}</Text>
-              </View>
+              {userProfile?.photoURL ? (
+                <Image source={{ uri: userProfile.photoURL }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{initial}</Text>
+                </View>
+              )}
               {/* Online indicator */}
               <View style={styles.onlineDot} />
             </Animated.View>
@@ -194,7 +204,7 @@ export default function ProfileScreen() {
           <MenuRow
             icon={<Ionicons name="create-outline" size={18} color={COLORS.darkGreenMid} />}
             label="Edit Profile"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('EditProfile')}
           />
           <MenuRow
             icon={<Ionicons name="notifications-outline" size={18} color={COLORS.darkGreenMid} />}
