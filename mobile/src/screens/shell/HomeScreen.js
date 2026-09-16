@@ -33,6 +33,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { isChild, ROLES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
 import { FONTS, SPACING, RADIUS } from '../../constants/theme';
+import { getPendingRequests, acceptLinkRequest } from '../../services/parentChildService';
 
 const { width } = Dimensions.get('window');
 
@@ -76,6 +77,32 @@ export default function HomeScreen() {
   // ── SOS hold progress (useNativeDriver: false — drives `width`) ──
   const sosProgress  = useRef(new Animated.Value(0)).current;
   const [sosHeld, setSosHeld] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState([]);
+
+  useEffect(() => {
+    if (childMode && userProfile?.uid) {
+      const loadRequests = async () => {
+        try {
+          const reqs = await getPendingRequests(userProfile.uid);
+          setPendingRequests(reqs);
+        } catch (e) {
+          console.warn('Failed to load pending requests', e);
+        }
+      };
+      loadRequests();
+      const interval = setInterval(loadRequests, 10000); // Check every 10s
+      return () => clearInterval(interval);
+    }
+  }, [childMode, userProfile]);
+
+  const handleAcceptRequest = async (linkId) => {
+    try {
+      await acceptLinkRequest(linkId);
+      setPendingRequests(prev => prev.filter(r => r.id !== linkId));
+    } catch (e) {
+      console.warn('Failed to accept request', e);
+    }
+  };
 
   useEffect(() => {
     // 1. Entry sequence
@@ -227,6 +254,29 @@ export default function HomeScreen() {
             </Text>
             <Ionicons name="options-outline" size={18} color={colors.textMuted} />
           </TouchableOpacity>
+
+          {/* Pending Link Requests Banner */}
+          {childMode && pendingRequests.length > 0 && (
+            <View style={[styles.pendingCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+              <View style={[styles.safeCardIcon, { backgroundColor: colors.primaryLight }]}>
+                <Ionicons name="link-outline" size={22} color={colors.primary} />
+              </View>
+              <View style={styles.safeCardText}>
+                <Text style={[styles.safeCardTitle, { color: colors.textPrimary }]}>
+                  Tracking Request
+                </Text>
+                <Text style={[styles.safeCardSub, { color: colors.textSecondary }]}>
+                  {pendingRequests[0].ownerName} wants to link with your account.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.safeViewBtn, { backgroundColor: colors.primary }]}
+                onPress={() => handleAcceptRequest(pendingRequests[0].id)}
+              >
+                <Text style={styles.safeViewBtnText}>Accept</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* You're marked safe card */}
           <View style={[styles.safeCard, { backgroundColor: colors.surface, borderLeftColor: colors.darkGreenMid }]}>
@@ -535,6 +585,18 @@ const styles = StyleSheet.create({
   safeCardSub:   { fontSize: 11, marginTop: 2, fontWeight: FONTS.medium },
   safeViewBtn:   { borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: 7 },
   safeViewBtnText: { fontSize: FONTS.sm, fontWeight: FONTS.bold, color: '#fff' },
+
+  // Pending card
+  pendingCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md, marginBottom: SPACING.lg,
+    gap: SPACING.sm,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+  },
 
   // ── SOS section ─────────────────────────────────────────────
   sosSection: {
