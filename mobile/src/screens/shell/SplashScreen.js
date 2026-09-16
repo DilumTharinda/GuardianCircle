@@ -2,14 +2,15 @@
  * GuardianCircle — SplashScreen.js
  * Member 1 builds this screen.
  *
- * Animations:
- *  1. Logo shield fades + scales in (0 → 600ms)
- *  2. App name slides up and fades in (400 → 900ms)
- *  3. Tagline fades in (700 → 1100ms)
- *  4. Pulsing ring around shield (loops while waiting)
- *  5. Navigates to Auth or Main after auth state resolves
- *
- * Place at: mobile/src/screens/shell/SplashScreen.js
+ * Modern animations:
+ *  1. Dark green gradient background fades in
+ *  2. Outer rotating ring (continuous slow spin)
+ *  3. Inner pulse ring (scale + opacity loop)
+ *  4. Shield icon springs in with scale + opacity
+ *  5. Shimmer accent lines spread outward
+ *  6. App name slides up and fades in
+ *  7. Tagline fades in
+ *  8. Progress bar fills left → right
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -20,281 +21,339 @@ import {
   Animated,
   StatusBar,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, FONTS, SPACING } from '../../constants/theme';
 
 const { width, height } = Dimensions.get('window');
+const RING_SIZE = 180;
+const SHIELD_SIZE = 100;
 
 export default function SplashScreen() {
-  // Animation values
-  const shieldScale = useRef(new Animated.Value(0.4)).current;
+  // Background
+  const bgOpacity    = useRef(new Animated.Value(0)).current;
+
+  // Shield
+  const shieldScale   = useRef(new Animated.Value(0.35)).current;
   const shieldOpacity = useRef(new Animated.Value(0)).current;
-  const titleTranslateY = useRef(new Animated.Value(28)).current;
-  const titleOpacity = useRef(new Animated.Value(0)).current;
+
+  // Rotating ring
+  const rotateAnim    = useRef(new Animated.Value(0)).current;
+
+  // Inner pulse ring
+  const pulseScale    = useRef(new Animated.Value(1)).current;
+  const pulseOpacity  = useRef(new Animated.Value(0.5)).current;
+
+  // Shimmer lines (4 directional)
+  const shim1 = useRef(new Animated.Value(0)).current;
+  const shim2 = useRef(new Animated.Value(0)).current;
+  const shim3 = useRef(new Animated.Value(0)).current;
+  const shim4 = useRef(new Animated.Value(0)).current;
+
+  // Text
+  const titleTranslate = useRef(new Animated.Value(30)).current;
+  const titleOpacity   = useRef(new Animated.Value(0)).current;
   const taglineOpacity = useRef(new Animated.Value(0)).current;
-  const pulseScale = useRef(new Animated.Value(1)).current;
-  const pulseOpacity = useRef(new Animated.Value(0.6)).current;
+
+  // Progress bar
+  const progressWidth  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Step 1: Shield appears
-    Animated.parallel([
-      Animated.spring(shieldScale, {
-        toValue: 1,
-        tension: 60,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shieldOpacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // 1. Fade in background
+    Animated.timing(bgOpacity, {
+      toValue: 1, duration: 300, useNativeDriver: true,
+    }).start();
 
-    // Step 2: Title slides up
+    // 2. Shield springs in
     Animated.sequence([
-      Animated.delay(350),
+      Animated.delay(200),
       Animated.parallel([
-        Animated.timing(titleTranslateY, {
-          toValue: 0,
-          duration: 480,
-          useNativeDriver: true,
+        Animated.spring(shieldScale, {
+          toValue: 1, tension: 55, friction: 6, useNativeDriver: true,
         }),
-        Animated.timing(titleOpacity, {
-          toValue: 1,
-          duration: 480,
-          useNativeDriver: true,
+        Animated.timing(shieldOpacity, {
+          toValue: 1, duration: 450, useNativeDriver: true,
         }),
       ]),
     ]).start();
 
-    // Step 3: Tagline fades in
-    Animated.sequence([
-      Animated.delay(650),
-      Animated.timing(taglineOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // 3. Rotating ring — continuous spin
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1, duration: 6000, useNativeDriver: true,
+      })
+    ).start();
 
-    // Step 4: Pulse ring loop
-    const pulse = () => {
+    // 4. Inner pulse loop
+    const doPulse = () => {
       Animated.parallel([
         Animated.sequence([
-          Animated.timing(pulseScale, {
-            toValue: 1.55,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseScale, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseScale, { toValue: 1.45, duration: 900, useNativeDriver: true }),
+          Animated.timing(pulseScale, { toValue: 1, duration: 900, useNativeDriver: true }),
         ]),
         Animated.sequence([
-          Animated.timing(pulseOpacity, {
-            toValue: 0,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseOpacity, {
-            toValue: 0.6,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseOpacity, { toValue: 0, duration: 900, useNativeDriver: true }),
+          Animated.timing(pulseOpacity, { toValue: 0.5, duration: 900, useNativeDriver: true }),
         ]),
-      ]).start(() => pulse());
+      ]).start(() => doPulse());
     };
+    setTimeout(doPulse, 400);
 
-    setTimeout(pulse, 600);
+    // 5. Shimmer lines spread
+    const shimmerDelay = 550;
+    Animated.sequence([
+      Animated.delay(shimmerDelay),
+      Animated.parallel([
+        Animated.spring(shim1, { toValue: 1, tension: 40, friction: 7, useNativeDriver: true }),
+        Animated.spring(shim2, { toValue: 1, tension: 40, friction: 7, useNativeDriver: true }),
+        Animated.spring(shim3, { toValue: 1, tension: 40, friction: 7, useNativeDriver: true }),
+        Animated.spring(shim4, { toValue: 1, tension: 40, friction: 7, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    // 6. App name slides up
+    Animated.sequence([
+      Animated.delay(750),
+      Animated.parallel([
+        Animated.timing(titleTranslate, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(titleOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    ]).start();
+
+    // 7. Tagline fades in
+    Animated.sequence([
+      Animated.delay(1050),
+      Animated.timing(taglineOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+
+    // 8. Progress bar fills
+    Animated.sequence([
+      Animated.delay(1200),
+      Animated.timing(progressWidth, {
+        toValue: 1, duration: 1800, useNativeDriver: false,
+      }),
+    ]).start();
   }, []);
+
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const shimTranslate = (anim, offsetX, offsetY) => ({
+    opacity: anim,
+    transform: [
+      {
+        translateX: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, offsetX],
+        }),
+      },
+      {
+        translateY: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, offsetY],
+        }),
+      },
+    ],
+  });
+
+  const progressBarWidth = progressWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDark} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
 
-      <LinearGradient
-        colors={[COLORS.primaryDark, COLORS.primary, COLORS.primaryMid]}
-        style={styles.gradient}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-      >
-        {/* Shield icon with pulse ring */}
-        <View style={styles.logoContainer}>
-          {/* Outer pulse ring */}
-          <Animated.View
-            style={[
-              styles.pulseRing,
-              {
-                transform: [{ scale: pulseScale }],
-                opacity: pulseOpacity,
-              },
-            ]}
-          />
+      <Animated.View style={[styles.fill, { opacity: bgOpacity }]}>
+        <LinearGradient
+          colors={[COLORS.darkGreen, COLORS.darkGreenMid, '#1A4B1F']}
+          style={styles.fill}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+        >
+          {/* ── Center logo cluster ── */}
+          <View style={styles.logoCluster}>
+            {/* Rotating outer ring */}
+            <Animated.View
+              style={[
+                styles.rotatingRing,
+                { transform: [{ rotate: spin }] },
+              ]}
+            />
 
-          {/* Shield circle */}
-          <Animated.View
+            {/* Static outer ring (solid) */}
+            <View style={styles.staticRing} />
+
+            {/* Inner pulse ring */}
+            <Animated.View
+              style={[
+                styles.pulseRing,
+                { transform: [{ scale: pulseScale }], opacity: pulseOpacity },
+              ]}
+            />
+
+            {/* Shimmer accent lines */}
+            <Animated.View style={[styles.shimLine, styles.shimTop, shimTranslate(shim1, 0, -60)]} />
+            <Animated.View style={[styles.shimLine, styles.shimBottom, shimTranslate(shim2, 0, 60)]} />
+            <Animated.View style={[styles.shimLine, styles.shimLeft, shimTranslate(shim3, -60, 0)]} />
+            <Animated.View style={[styles.shimLine, styles.shimRight, shimTranslate(shim4, 60, 0)]} />
+
+            {/* Shield icon */}
+            <Animated.View
+              style={[
+                styles.shieldCircle,
+                {
+                  transform: [{ scale: shieldScale }],
+                  opacity: shieldOpacity,
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={52}
+                color="#fff"
+              />
+            </Animated.View>
+          </View>
+
+          {/* App name */}
+          <Animated.Text
             style={[
-              styles.shieldCircle,
+              styles.appName,
               {
-                transform: [{ scale: shieldScale }],
-                opacity: shieldOpacity,
+                opacity: titleOpacity,
+                transform: [{ translateY: titleTranslate }],
               },
             ]}
           >
-            {/* Shield SVG-style using text emoji fallback */}
-            <Text style={styles.shieldIcon}>🛡️</Text>
+            GuardianCircle
+          </Animated.Text>
+
+          {/* Tagline */}
+          <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
+            Your safety, always connected
+          </Animated.Text>
+
+          {/* Progress bar */}
+          <Animated.View style={[styles.progressContainer, { opacity: taglineOpacity }]}>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[styles.progressFill, { width: progressBarWidth }]}
+              />
+            </View>
           </Animated.View>
-        </View>
-
-        {/* App name */}
-        <Animated.Text
-          style={[
-            styles.appName,
-            {
-              opacity: titleOpacity,
-              transform: [{ translateY: titleTranslateY }],
-            },
-          ]}
-        >
-          GuardianCircle
-        </Animated.Text>
-
-        {/* Tagline */}
-        <Animated.Text
-          style={[styles.tagline, { opacity: taglineOpacity }]}
-        >
-          Your safety, always connected
-        </Animated.Text>
-
-        {/* Bottom loader dots */}
-        <Animated.View
-          style={[styles.dotsContainer, { opacity: taglineOpacity }]}
-        >
-          <LoadingDots />
-        </Animated.View>
-      </LinearGradient>
-    </View>
-  );
-}
-
-// Animated loading dots
-function LoadingDots() {
-  const dot1 = useRef(new Animated.Value(0.3)).current;
-  const dot2 = useRef(new Animated.Value(0.3)).current;
-  const dot3 = useRef(new Animated.Value(0.3)).current;
-
-  useEffect(() => {
-    const animateDot = (dot, delay) => {
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(dot, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(dot, {
-            toValue: 0.3,
-            duration: 400,
-            useNativeDriver: true,
-          }),
-          Animated.delay(800 - delay),
-        ])
-      ).start();
-    };
-
-    animateDot(dot1, 0);
-    animateDot(dot2, 200);
-    animateDot(dot3, 400);
-  }, []);
-
-  return (
-    <View style={styles.dots}>
-      {[dot1, dot2, dot3].map((dot, i) => (
-        <Animated.View
-          key={i}
-          style={[styles.dot, { opacity: dot }]}
-        />
-      ))}
+        </LinearGradient>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  gradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.xxl,
-  },
+  container: { flex: 1, backgroundColor: COLORS.darkGreen },
+  fill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  logoContainer: {
+  // ── Logo cluster ──
+  logoCluster: {
+    width: RING_SIZE,
+    height: RING_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.xl,
-    width: 140,
-    height: 140,
+  },
+
+  rotatingRing: {
+    position: 'absolute',
+    width: RING_SIZE,
+    height: RING_SIZE,
+    borderRadius: RING_SIZE / 2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderStyle: 'dashed',
+  },
+
+  staticRing: {
+    position: 'absolute',
+    width: RING_SIZE - 24,
+    height: RING_SIZE - 24,
+    borderRadius: (RING_SIZE - 24) / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
   },
 
   pulseRing: {
     position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: SHIELD_SIZE + 16,
+    height: SHIELD_SIZE + 16,
+    borderRadius: (SHIELD_SIZE + 16) / 2,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.4)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
 
+  // Shimmer accent lines
+  shimLine: {
+    position: 'absolute',
+    width: 3,
+    height: 20,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  shimTop: { transform: [{ rotate: '0deg' }] },
+  shimBottom: { transform: [{ rotate: '180deg' }] },
+  shimLeft: { width: 20, height: 3, transform: [{ rotate: '90deg' }] },
+  shimRight: { width: 20, height: 3, transform: [{ rotate: '270deg' }] },
+
   shieldCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: SHIELD_SIZE,
+    height: SHIELD_SIZE,
+    borderRadius: SHIELD_SIZE / 2,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-
-  shieldIcon: {
-    fontSize: 46,
+    borderColor: 'rgba(255,255,255,0.45)',
   },
 
   appName: {
-    fontSize: FONTS.xxl,
+    fontSize: FONTS.xxl + 2,
     fontWeight: FONTS.bold,
-    color: COLORS.white,
-    letterSpacing: 0.5,
+    color: '#fff',
+    letterSpacing: 0.6,
     marginBottom: SPACING.sm,
+    textAlign: 'center',
   },
 
   tagline: {
     fontSize: FONTS.base,
-    color: 'rgba(255,255,255,0.78)',
-    fontWeight: FONTS.regular,
-    letterSpacing: 0.2,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: FONTS.medium,
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
 
-  dotsContainer: {
+  // Progress bar
+  progressContainer: {
     position: 'absolute',
-    bottom: 60,
+    bottom: Platform.OS === 'ios' ? 70 : 55,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
-
-  dots: {
-    flexDirection: 'row',
-    gap: 8,
+  progressTrack: {
+    width: 140,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
   },
-
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+  progressFill: {
+    height: '100%',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderRadius: 2,
   },
 });

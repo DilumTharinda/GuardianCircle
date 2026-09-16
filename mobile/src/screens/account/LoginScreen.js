@@ -3,7 +3,7 @@
  * Member 6 owns this screen (UI built by Member 1 as part of the shell).
  *
  * Animations:
- *  1. Green header arc slides down on mount
+ *  1. Dark green header arc slides down on mount
  *  2. Form card fades + translates up
  *  3. Input fields focus ring animates in
  *  4. Login button scales on press
@@ -28,6 +28,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
@@ -47,46 +48,34 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState(null);
 
   // Animation refs
-  const headerHeight = useRef(new Animated.Value(0)).current;
-  const formOpacity = useRef(new Animated.Value(0)).current;
-  const formTranslateY = useRef(new Animated.Value(40)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
-  const errorShake = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.7)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const headerHeight    = useRef(new Animated.Value(0)).current;
+  const formOpacity     = useRef(new Animated.Value(0)).current;
+  const formTranslateY  = useRef(new Animated.Value(40)).current;
+  const buttonScale     = useRef(new Animated.Value(1)).current;
+  const errorShake      = useRef(new Animated.Value(0)).current;
+  const logoScale       = useRef(new Animated.Value(0.7)).current;
+  const logoOpacity     = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Sequence: header → logo → form
     Animated.sequence([
       Animated.timing(headerHeight, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: false,
+        toValue: 1, duration: 500, useNativeDriver: false,
       }),
       Animated.parallel([
         Animated.spring(logoScale, {
-          toValue: 1,
-          tension: 70,
-          friction: 6,
-          useNativeDriver: true,
+          toValue: 1, tension: 70, friction: 6, useNativeDriver: true,
         }),
         Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 350,
-          useNativeDriver: true,
+          toValue: 1, duration: 350, useNativeDriver: true,
         }),
       ]),
       Animated.parallel([
         Animated.timing(formOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
+          toValue: 1, duration: 400, useNativeDriver: true,
         }),
         Animated.spring(formTranslateY, {
-          toValue: 0,
-          tension: 60,
-          friction: 8,
-          useNativeDriver: true,
+          toValue: 0, tension: 60, friction: 8, useNativeDriver: true,
         }),
       ]),
     ]).start();
@@ -103,18 +92,12 @@ export default function LoginScreen() {
   }
 
   function onPressIn() {
-    Animated.spring(buttonScale, {
-      toValue: 0.96,
-      useNativeDriver: true,
-    }).start();
+    Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true }).start();
   }
 
   function onPressOut() {
     Animated.spring(buttonScale, {
-      toValue: 1,
-      tension: 200,
-      friction: 5,
-      useNativeDriver: true,
+      toValue: 1, tension: 200, friction: 5, useNativeDriver: true,
     }).start();
   }
 
@@ -153,12 +136,12 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primaryDark} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
 
-      {/* Animated green header */}
+      {/* Animated dark green header */}
       <Animated.View style={[styles.headerWrapper, { height: headerHeightInterpolated }]}>
         <LinearGradient
-          colors={[COLORS.primaryDark, COLORS.primary]}
+          colors={[COLORS.darkGreen, COLORS.darkGreenMid]}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -171,7 +154,7 @@ export default function LoginScreen() {
             ]}
           >
             <View style={styles.logoCircle}>
-              <Text style={styles.logoEmoji}>🛡️</Text>
+              <MaterialCommunityIcons name="shield-check" size={34} color="#fff" />
             </View>
             <Text style={styles.logoText}>GuardianCircle</Text>
           </Animated.View>
@@ -212,7 +195,8 @@ export default function LoginScreen() {
                   { transform: [{ translateX: errorShake }] },
                 ]}
               >
-                <Text style={styles.errorText}>⚠️  {error}</Text>
+                <Ionicons name="warning-outline" size={16} color="#B91C1C" style={{ marginRight: 6 }} />
+                <Text style={styles.errorText}>{error}</Text>
               </Animated.View>
             ) : null}
 
@@ -225,7 +209,12 @@ export default function LoginScreen() {
                   focusedField === 'email' && styles.inputWrapperFocused,
                 ]}
               >
-                <Text style={styles.inputIcon}>✉️</Text>
+                <Ionicons
+                  name="mail-outline"
+                  size={18}
+                  color={focusedField === 'email' ? COLORS.darkGreenMid : COLORS.textMuted}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="you@example.com"
@@ -251,7 +240,12 @@ export default function LoginScreen() {
                   focusedField === 'password' && styles.inputWrapperFocused,
                 ]}
               >
-                <Text style={styles.inputIcon}>🔒</Text>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={18}
+                  color={focusedField === 'password' ? COLORS.darkGreenMid : COLORS.textMuted}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your password"
@@ -265,9 +259,11 @@ export default function LoginScreen() {
                   onSubmitEditing={handleLogin}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Text style={styles.inputIcon}>
-                    {showPassword ? '🙈' : '👁️'}
-                  </Text>
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={COLORS.textMuted}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -288,13 +284,13 @@ export default function LoginScreen() {
                 disabled={loading}
               >
                 <LinearGradient
-                  colors={[COLORS.primary, COLORS.primaryDark]}
+                  colors={[COLORS.darkGreenMid, COLORS.darkGreen]}
                   style={styles.loginButtonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
                   {loading ? (
-                    <ActivityIndicator color={COLORS.white} size="small" />
+                    <ActivityIndicator color="#fff" size="small" />
                   ) : (
                     <Text style={styles.loginButtonText}>Sign in</Text>
                   )}
@@ -334,13 +330,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   // Header
-  headerWrapper: {
-    width: '100%',
-    overflow: 'hidden',
-  },
+  headerWrapper: { width: '100%', overflow: 'hidden' },
   headerGradient: {
     flex: 1,
-    paddingTop: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -356,10 +349,7 @@ const styles = StyleSheet.create({
   },
 
   // Logo
-  logoArea: {
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
+  logoArea: { alignItems: 'center', gap: SPACING.sm },
   logoCircle: {
     width: 68,
     height: 68,
@@ -370,11 +360,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.45)',
   },
-  logoEmoji: { fontSize: 30 },
   logoText: {
     fontSize: FONTS.md,
     fontWeight: FONTS.bold,
-    color: COLORS.white,
+    color: '#fff',
     letterSpacing: 0.4,
   },
 
@@ -405,14 +394,17 @@ const styles = StyleSheet.create({
 
   // Error
   errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FEE2E2',
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.danger,
+    borderLeftColor: COLORS.dangerRed,
   },
   errorText: {
+    flex: 1,
     fontSize: FONTS.sm,
     color: '#B91C1C',
     fontWeight: FONTS.medium,
@@ -437,10 +429,10 @@ const styles = StyleSheet.create({
     height: 52,
   },
   inputWrapperFocused: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.darkGreenMid,
+    backgroundColor: COLORS.darkGreenSurface,
   },
-  inputIcon: { fontSize: 17, marginRight: SPACING.sm },
+  inputIcon: { marginRight: SPACING.sm },
   input: {
     flex: 1,
     fontSize: FONTS.base,
@@ -451,7 +443,7 @@ const styles = StyleSheet.create({
   forgotRow: { alignItems: 'flex-end', marginBottom: SPACING.lg },
   forgotText: {
     fontSize: FONTS.sm,
-    color: COLORS.primary,
+    color: COLORS.darkGreenMid,
     fontWeight: FONTS.semiBold,
   },
 
@@ -466,7 +458,7 @@ const styles = StyleSheet.create({
   loginButtonText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.bold,
-    color: COLORS.white,
+    color: '#fff',
     letterSpacing: 0.3,
   },
 
@@ -478,10 +470,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: {
-    fontSize: FONTS.sm,
-    color: COLORS.textMuted,
-  },
+  dividerText: { fontSize: FONTS.sm, color: COLORS.textMuted },
 
   // Google
   googleButton: {
@@ -507,17 +496,11 @@ const styles = StyleSheet.create({
   },
 
   // Register link
-  registerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  registerPrompt: {
-    fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
-  },
+  registerRow: { flexDirection: 'row', justifyContent: 'center' },
+  registerPrompt: { fontSize: FONTS.sm, color: COLORS.textSecondary },
   registerLink: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.bold,
-    color: COLORS.primary,
+    color: COLORS.darkGreenMid,
   },
 });
