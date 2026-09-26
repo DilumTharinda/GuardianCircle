@@ -28,7 +28,6 @@ import {
 import { db } from '../../services/firebase';
 import { uploadImage } from '../../services/cloudinaryService';
 import { useAuth } from '../../context/AuthContext';
-// NEW: import the automated matching logic we built in Step 1
 import { findMatchesForFoundReport } from '../../services/matchingService';
 
 export default function ReportFoundScreen({ navigation }) {
@@ -44,7 +43,6 @@ export default function ReportFoundScreen({ navigation }) {
   const [submitting, setSubmitting] = useState(false);
 
   async function pickImage() {
-    // Ask the user for permission before touching their photo gallery
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
@@ -57,7 +55,7 @@ export default function ReportFoundScreen({ navigation }) {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.5, // compress before upload, saves Cloudinary bandwidth
+      quality: 0.5,
     });
 
     if (!result.canceled) {
@@ -68,7 +66,6 @@ export default function ReportFoundScreen({ navigation }) {
   async function getCurrentLocation() {
     setGettingLocation(true);
     try {
-      // Ask for location permission first
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
@@ -80,10 +77,6 @@ export default function ReportFoundScreen({ navigation }) {
       }
 
       const loc = await Location.getCurrentPositionAsync({});
-
-      // Turn the coordinates into a geohash string.
-      // A geohash is needed later for the automated matching logic,
-      // so we can compare "how close" two locations are.
       const geohash = ngeohash.encode(
         loc.coords.latitude,
         loc.coords.longitude
@@ -101,8 +94,6 @@ export default function ReportFoundScreen({ navigation }) {
     }
   }
 
-  // Fetches open "lost" reports so the user can manually pick one
-  // this found item might belong to (this is the MANUAL linking option).
   async function fetchLostReports() {
     setLoadingReports(true);
     try {
@@ -134,18 +125,21 @@ export default function ReportFoundScreen({ navigation }) {
     }
   }
 
-  // Creates one "matches" record in Firestore linking a found report
-  // to a candidate lost report. Also marks the lost report as "sighted"
-  // so its original reporter can see something may have turned up.
-  async function createMatchRecord(lostReportId, foundReportId) {
+  // Creates one "matches" record linking a found report to a candidate
+  // lost report. Stores BOTH reporters' user IDs directly on the match
+  // doc, so later we can find "matches involving me" with a simple
+  // query, instead of doing extra Firestore reads.
+  async function createMatchRecord(lostReport, foundReportId) {
     await addDoc(collection(db, 'matches'), {
-      lostReportId,
+      lostReportId: lostReport.id,
       foundReportId,
+      lostReporterId: lostReport.reportedBy,
+      foundReporterId: user.uid,
       status: 'suggested',
       createdAt: serverTimestamp(),
     });
 
-    await updateDoc(doc(db, 'reports', lostReportId), {
+    await updateDoc(doc(db, 'reports', lostReport.id), {
       status: 'sighted',
     });
   }
@@ -161,14 +155,12 @@ export default function ReportFoundScreen({ navigation }) {
 
     setSubmitting(true);
     try {
-      // STEP A: Upload the photo (if the user added one)
       let photoUrl = null;
       if (photoUri) {
         const uploadResult = await uploadImage(photoUri, 'found-items');
         photoUrl = uploadResult.url;
       }
 
-      // STEP B: Save the found report itself to Firestore
       const foundReportData = {
         type: 'found',
         description,
@@ -191,28 +183,21 @@ export default function ReportFoundScreen({ navigation }) {
 
       let matchCount = 0;
 
-      // STEP C: Handle matching.
-      // Case 1 — the user MANUALLY picked a specific lost report themselves.
       if (isLinkedToLost && selectedLostReport) {
-        await createMatchRecord(selectedLostReport.id, foundReportRef.id);
+        await createMatchRecord(selectedLostReport, foundReportRef.id);
         matchCount = 1;
       } else {
-        // Case 2 — the user did NOT manually pick one, so we run the
-        // AUTOMATED matching logic (FR-2.3) to suggest likely candidates
-        // based on location closeness and description similarity.
         const suggestedMatches = await findMatchesForFoundReport(
           foundReportData,
-          3 // only take the top 3 best candidates
+          3
         );
 
-        // Create a "suggested" match record for each good candidate found.
         for (const candidate of suggestedMatches) {
-          await createMatchRecord(candidate.id, foundReportRef.id);
+          await createMatchRecord(candidate, foundReportRef.id);
         }
         matchCount = suggestedMatches.length;
       }
 
-      // STEP D: Let the user know what happened
       if (matchCount > 0) {
         Alert.alert(
           'Success',
