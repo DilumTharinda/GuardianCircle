@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
+import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
-
+import { initOfflineDb } from './src/services/offlineStorageService';
+ 
+ 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -36,22 +39,28 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
+ 
 export default function App() {
+  useEffect(() => {
+    initOfflineDb();
+  }, []);
+ 
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <AuthProvider>
-          <NavigationContainer>
-            <StatusBar style="auto" />
-            <AppNavigator />
-          </NavigationContainer>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NavigationContainer>
+              <StatusBar style="auto" />
+              <AppNavigator />
+            </NavigationContainer>
+          </AuthProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
-
+ 
 const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
@@ -94,3 +103,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+ 

@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { isChild } from '../constants/roles';
+import { isChild, isParent } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
+import { COLORS } from '../constants/theme';
+import ThemeToggle from '../components/ThemeToggle';
 
 // Import screens
 import HomeScreen from '../screens/shell/HomeScreen';
@@ -11,49 +13,61 @@ import SOSScreen from '../screens/safety/SOSScreen';
 import MapScreen from '../screens/journey/MapScreen';
 import LostFoundNavigator from './LostFoundNavigator';
 import ProfileScreen from '../screens/account/ProfileScreen';
+import ParentDashboardScreen from '../screens/parentchild/ParentDashboardScreen';
 
 const Tab = createBottomTabNavigator();
 
-// Simple icon component — replace with a real icon library (e.g., @expo/vector-icons)
-function TabIcon({ label, focused }) {
-  const iconMap = {
-    Home: '🏠', Safety: '🆘', Map: '🗺️', 'Lost & Found': '🔍', Profile: '👤',
-  };
-  return (
-    <Text style={{ fontSize: focused ? 24 : 20, opacity: focused ? 1 : 0.6 }}>
-      {iconMap[label]}
-    </Text>
-  );
-}
+// Icon map — Ionicons name for each route
+const TAB_ICONS = {
+  [ROUTES.HOME]:       { active: 'home', inactive: 'home-outline' },
+  [ROUTES.SAFETY]:     { active: 'shield', inactive: 'shield-outline' },
+  [ROUTES.MAP]:        { active: 'map', inactive: 'map-outline' },
+  [ROUTES.LOST_FOUND]: { active: 'search', inactive: 'search-outline' },
+  [ROUTES.PROFILE]:    { active: 'person', inactive: 'person-outline' },
+};
 
 export default function MainTabNavigator() {
   const { userProfile } = useAuth();
   const childMode = userProfile && isChild(userProfile.role);
+  const parentMode = userProfile && isParent(userProfile.role);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused }) => (
-          <TabIcon label={route.name} focused={focused} />
-        ),
-        tabBarActiveTintColor: '#E53935',
-        tabBarInactiveTintColor: '#888',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#eee',
-          paddingBottom: 4,
-          height: 60,
+        tabBarIcon: ({ focused, color, size }) => {
+          const icons = TAB_ICONS[route.name] ?? { active: 'ellipse', inactive: 'ellipse-outline' };
+          const iconName = focused ? icons.active : icons.inactive;
+          return <Ionicons name={iconName} size={focused ? 24 : 22} color={color} />;
         },
-        headerStyle: { backgroundColor: '#E53935' },
+        tabBarActiveTintColor: COLORS.darkGreenMid,
+        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarStyle: {
+          backgroundColor: COLORS.surface,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.border,
+          paddingBottom: 6,
+          paddingTop: 4,
+          height: 62,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          marginTop: 0,
+        },
+        headerStyle: { backgroundColor: COLORS.darkGreen },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
+        headerRight: () => <ThemeToggle style={{ marginRight: 15 }} iconColor="#fff" />,
       })}
     >
       <Tab.Screen
         name={ROUTES.HOME}
-        component={HomeScreen}
-        options={{ title: 'Home', tabBarLabel: 'Home' }}
+        component={parentMode ? ParentDashboardScreen : HomeScreen}
+        options={{ 
+          title: parentMode ? 'Family' : 'Home', 
+          tabBarLabel: parentMode ? 'Family' : 'Home', 
+          headerShown: parentMode ? true : false // Parent dashboard doesn't have a custom header, it uses the native one
+        }}
       />
       <Tab.Screen
         name={ROUTES.SAFETY}
@@ -71,12 +85,12 @@ export default function MainTabNavigator() {
       <Tab.Screen
         name={ROUTES.LOST_FOUND}
         component={LostFoundNavigator}
-        options={{ title: 'Lost & Found', tabBarLabel: 'Lost & Found', headerShown: false }}
+        options={{ title: 'Lost & Found', tabBarLabel: 'Lost&Found', headerShown: false }}
       />
       <Tab.Screen
         name={ROUTES.PROFILE}
         component={ProfileScreen}
-        options={{ title: 'Profile', tabBarLabel: 'Profile' }}
+        options={{ title: 'Profile', tabBarLabel: 'Profile', headerShown: false }}
       />
     </Tab.Navigator>
   );
