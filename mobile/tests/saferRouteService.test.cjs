@@ -113,17 +113,56 @@ test('route alternatives contain only whitelisted geometry and travel fields', (
   assert.deepEqual(Object.keys(ranked.routes[0].coordinates[0]).sort(), ['latitude', 'longitude']);
 });
 
-test('routing remains explicitly unavailable when only native map tiles are configured', async () => {
+test('OSRM request uses real GPS and destination coordinates and converts real alternatives', async () => {
+  const origin = { latitude: 6.9, longitude: 79.8 };
+  const destination = { latitude: 6.91, longitude: 79.81 };
+  let requestedUrl;
+  const routes = await service.getRouteCandidates(origin, destination, async (url, options) => {
+    requestedUrl = url;
+    assert.equal(options.headers.Accept, 'application/json');
+    return {
+      ok: true,
+      json: async () => ({
+        code: 'Ok', routes: [
+          { distance: 1000, duration: 100, geometry: { type: 'LineString', coordinates: [[79.8, 6.9], [79.805, 6.905], [79.81, 6.91]] } },
+          { distance: 1200, duration: 120, geometry: { type: 'LineString', coordinates: [[79.8, 6.9], [79.807, 6.904], [79.81, 6.91]] } },
+        ],
+      }),
+    };
+  });
+  assert.match(requestedUrl, /\/driving\/79\.8,6\.9;79\.81,6\.91\?/);
+  assert.match(requestedUrl, /alternatives=true/);
+  assert.match(requestedUrl, /geometries=geojson/);
+  assert.deepEqual(routes.map(({ id, distanceMeters, durationSeconds }) => ({ id, distanceMeters, durationSeconds })), [
+    { id: 'osrm-route-1', distanceMeters: 1000, durationSeconds: 100 },
+    { id: 'osrm-route-2', distanceMeters: 1200, durationSeconds: 120 },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(routes[0].coordinates[0])), { longitude: 79.8, latitude: 6.9 });
+  assert.equal(service.rankRouteCandidates(routes, [{ latitude: 6.905, longitude: 79.805, weight: 4 }]).status, 'ranked');
+});
+
+test('missing coordinates, no routes, network errors, and malformed OSRM responses are handled', async () => {
   await assert.rejects(() => service.getRouteCandidates(null, { latitude: 6, longitude: 79 }), {
     code: 'safer-route/missing-location',
   });
   await assert.rejects(() => service.getRouteCandidates({ latitude: 6, longitude: 79 }, null), {
     code: 'safer-route/missing-destination',
   });
-  await assert.rejects(() => service.getRouteCandidates(
-    { latitude: 6, longitude: 79 }, { latitude: 7, longitude: 80 },
-  ), { code: 'safer-route/routing-not-configured' });
-  assert.match(service.getSaferRouteErrorMessage({ code: 'routing-not-configured' }), /Directions or Routes API/);
+  const origin = { latitude: 6, longitude: 79 };
+  const destination = { latitude: 7, longitude: 80 };
+  const mockResponse = (payload) => async () => ({ ok: true, json: async () => payload });
+  assert.deepEqual(JSON.parse(JSON.stringify(await service.getRouteCandidates(origin, destination,
+    mockResponse({ code: 'NoRoute', routes: [] })))), []);
+  await assert.rejects(() => service.getRouteCandidates(origin, destination,
+    async () => { throw new Error('network'); }), { code: 'safer-route/network-request-failed' });
+  await assert.rejects(() => service.getRouteCandidates(origin, destination,
+    mockResponse({ code: 'Ok', routes: [{ distance: 'bad', geometry: {} }] })), {
+    code: 'safer-route/malformed-response',
+  });
+  await assert.rejects(() => service.getRouteCandidates(origin, destination,
+    mockResponse({ code: 'Ok', routes: 'malformed' })), { code: 'safer-route/malformed-response' });
+  await assert.rejects(() => service.getRouteCandidates(origin, destination,
+    async () => ({ ok: false, status: 503 })), { code: 'safer-route/unavailable' });
+  assert.match(service.getSaferRouteErrorMessage({ code: 'malformed-response' }), /invalid response/);
   assert.match(service.getSaferRouteErrorMessage({ code: 'network-request-failed' }), /connection/);
-  assert.doesNotMatch(service.getSaferRouteErrorMessage({ code: 'routing-not-configured' }), /secret|apiKey/);
 });

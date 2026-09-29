@@ -86,7 +86,7 @@ export default function MapScreen() {
   const unsafeZones = useUnsafeZones(
     user?.uid,
     Boolean(mapAvailable && focused && (showUnsafeLayer || routePanelOpen)
-      && (locationState.status === 'success' || journey.location)),
+      && (locationState.status === 'success' || journey.location || routePanelOpen)),
   );
   const unsafeZonesRef = useRef(unsafeZones);
   unsafeZonesRef.current = unsafeZones;
@@ -141,23 +141,23 @@ export default function MapScreen() {
       return;
     }
 
-    let origin = journey.phase === 'active' && isFreshJourneyFix(journey.location, Date.now())
-      ? journey.location : null;
-    if (!origin) {
-      const snapshot = await getForegroundLocationSnapshot();
-      if (requestId !== routeRequestId.current) return;
-      if (snapshot.status !== 'success' || !isFreshJourneyFix(snapshot, Date.now())) {
-        setCurrentRouteState({
-          status: 'error',
-          message: snapshot.status === 'success'
-            ? 'Get a fresh real GPS position before requesting a route.' : snapshot.message,
-        });
-        return;
-      }
-      origin = snapshot;
-    }
-
     try {
+      let origin = journey.phase === 'active' && isFreshJourneyFix(journey.location, Date.now())
+        ? journey.location : null;
+      if (!origin) {
+        const snapshot = await getForegroundLocationSnapshot();
+        if (requestId !== routeRequestId.current) return;
+        if (snapshot.status !== 'success' || !isFreshJourneyFix(snapshot, Date.now())) {
+          setCurrentRouteState({
+            status: 'error',
+            message: snapshot.status === 'success'
+              ? 'Get a fresh real GPS position before requesting a route.' : snapshot.message,
+          });
+          return;
+        }
+        origin = snapshot;
+      }
+
       const candidates = await getRouteCandidates(origin, selectedDestination);
       if (requestId !== routeRequestId.current) return;
       const latestZones = unsafeZonesRef.current;
@@ -462,7 +462,7 @@ export default function MapScreen() {
         {routePanelOpen && (
           <View style={styles.routeBox} accessibilityLiveRegion="polite">
             <View style={styles.heatmapHeader}>
-              <Text style={styles.routeTitle}>Report-based route suggestion</Text>
+              <Text style={styles.routeTitle}>Report-based driving route suggestion</Text>
               <TouchableOpacity style={styles.linkButton} onPress={() => {
                 routeRequestId.current += 1;
                 setRoutePanelOpen(false);
@@ -472,14 +472,14 @@ export default function MapScreen() {
             {routeState.status === 'loading' || routeState.status === 'scoring' ? (
               <View style={styles.inlineRow}><ActivityIndicator color="#1976D2" />
                 <Text style={styles.routeText}>{routeState.status === 'scoring'
-                  ? 'Comparing route alternatives with user reports...' : 'Checking current location and route availability...'}</Text></View>
+                  ? 'Comparing route alternatives with user reports...' : 'Requesting OSRM driving routes from your current location...'}</Text></View>
             ) : routeState.status === 'error' || routeState.status === 'no-routes' ? (
               <Text accessibilityRole="alert" style={styles.routeError}>{routeState.message}</Text>
             ) : routeState.status === 'ready' ? (
               <>
                 {routeState.routes.map((route, index) => (
                   <Text key={route.id} style={styles.routeText}>
-                    {route.id === routeState.suggestedRouteId ? 'Lower report score' : `Alternative ${index + 1}`}
+                    {route.id === routeState.suggestedRouteId ? 'Lowest report score' : `Alternative ${index + 1}`}
                     {' · '}{(route.distanceMeters / 1000).toFixed(1)} km · {Math.round(route.durationSeconds / 60)} min
                     {route.riskScore == null ? ' · report data unavailable' : ` · score ${route.riskScore.toFixed(2)}`}
                   </Text>
@@ -496,6 +496,11 @@ export default function MapScreen() {
             <Text style={styles.routeDisclaimer}>
               Reports reflect user submissions only. A lower score is not a guarantee that a route is safe.
             </Text>
+            <Text style={styles.routeAttribution}>
+              Demo driving routes by OSRM. © OpenStreetMap contributors (ODbL).
+            </Text>
+            <Text style={styles.routeLinks} onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright').catch(() => {})}
+              accessibilityRole="link">OpenStreetMap attribution and licence</Text>
           </View>
         )}
         {reportNotice && (
@@ -715,6 +720,8 @@ const styles = StyleSheet.create({
   routeText: { color: '#4527A0', fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 5 },
   routeError: { color: '#B71C1C', fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 6 },
   routeDisclaimer: { color: '#5E35B1', fontSize: 11, lineHeight: 15, textAlign: 'center', marginTop: 6 },
+  routeAttribution: { color: '#5D536D', fontSize: 10, lineHeight: 14, textAlign: 'center', marginTop: 6 },
+  routeLinks: { color: '#3949AB', fontSize: 10, textAlign: 'center', textDecorationLine: 'underline', marginTop: 3 },
   errorBox: { borderRadius: 8, padding: 10, backgroundColor: '#FFEBEE' },
   errorText: { color: '#B71C1C', fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });

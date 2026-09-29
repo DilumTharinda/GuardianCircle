@@ -1,21 +1,24 @@
 # Safer route scoring
 
-Phase 7 includes a reusable scorer for real route candidates, but route retrieval
-is not available in the current app configuration. `app.config.js` supplies
-`EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` to the Android native map plugin for map tiles;
-it does not enable or call Google Directions API or Routes API. The current
-scorer therefore receives no production routes and the map explains the missing
-integration instead of drawing synthetic alternatives.
+Phase 7 requests real driving alternatives from the public OSRM demo endpoint
+using OpenStreetMap data. It asks for full GeoJSON route geometry and maps each
+OSRM distance, duration, and coordinate array into the existing route scorer's
+candidate format. OSRM may return no alternatives for some origin/destination
+pairs; only routes returned by the service are displayed.
 
-When a configured routing integration supplies candidates, the scorer uses the
-real Phase 6 aggregated unsafe-report cells. For each cell it finds the nearest
+For each real Phase 6 aggregated unsafe-report cell, the scorer finds its nearest
 distance to the route geometry. A cell within 250 metres contributes its
 aggregate weight multiplied by `1 - distance / 250`; cells farther away
 contribute zero. Contributions are summed and rounded to three decimals. Lower
 scores are ranked first, with distance and then duration as deterministic
-tie-breakers. Invalid candidates and malformed report cells are ignored.
+tie-breakers. Invalid candidates and malformed report cells are ignored. With
+no report data, routes have no report-based score or suggested route.
 
-This score only compares routes against available user reports. It is not a
-probability, a promise of safety, or evidence that unreported areas are safe.
-With no report data, the result explicitly has no report-based score or suggested
-route.
+The score compares only against available user reports. It is not a probability,
+a promise of safety, or evidence that unreported areas are safe. The public OSRM
+endpoint is demo infrastructure with no availability guarantee; this integration
+uses its driving profile and is not a pedestrian-routing guarantee or a
+production safety backend.
+
+The route panel credits `Routing by OSRM` and `© OpenStreetMap contributors` and
+links to the OpenStreetMap copyright/ODbL page.

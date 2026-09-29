@@ -1,6 +1,7 @@
 import { isCoordinate } from '../utils/journeyMath';
 
 export const UNSAFE_ZONE_PROXIMITY_METERS = 250;
+export const OSRM_ROUTING_URL = 'https://router.project-osrm.org/route/v1/driving';
 const EARTH_RADIUS_METERS = 6371000;
 
 function toLocalMeters(point, origin) {
@@ -114,34 +115,80 @@ export function rankRouteCandidates(candidates, zones) {
   };
 }
 
-/**
- * This app configures a native Google Maps SDK key for map tiles only. It does
- * not configure an enabled/routed Directions or Routes API. Never substitute
- * straight lines or synthetic candidates when that external service is absent.
- */
-export async function getRouteCandidates(_origin, _destination) {
-  if (!isCoordinate(_origin)) {
+/** Fetch real route candidates from OSRM; never substitute synthetic geometry. */
+export async function getRouteCandidates(origin, destination, fetchImpl = globalThis.fetch) {
+  if (!isCoordinate(origin)) {
     const error = new Error('A valid current location is required to request routes.');
     error.code = 'safer-route/missing-location';
     throw error;
   }
-  if (!isCoordinate(_destination)) {
+  if (!isCoordinate(destination)) {
     const error = new Error('A valid destination is required to request routes.');
     error.code = 'safer-route/missing-destination';
     throw error;
   }
-  const error = new Error('A Google Directions or Routes API integration is required to fetch route alternatives.');
-  error.code = 'safer-route/routing-not-configured';
-  throw error;
+  if (typeof fetchImpl !== 'function') {
+    const error = new Error('OSRM routing is unavailable on this device.');
+    error.code = 'safer-route/unavailable';
+    throw error;
+  }
+
+  const coordinates = `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
+  const url = `${OSRM_ROUTING_URL}/${coordinates}?alternatives=true&overview=full&geometries=geojson&steps=false`;
+  let response;
+  try {
+    response = await fetchImpl(url, { headers: { Accept: 'application/json' } });
+  } catch (_error) {
+    const error = new Error('Could not reach the OSRM routing service.');
+    error.code = 'safer-route/network-request-failed';
+    throw error;
+  }
+  if (!response?.ok) {
+    const error = new Error('The OSRM routing service returned an error.');
+    error.code = response?.status === 429 ? 'safer-route/resource-exhausted' : 'safer-route/unavailable';
+    throw error;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_error) {
+    const error = new Error('The OSRM routing response was malformed.');
+    error.code = 'safer-route/malformed-response';
+    throw error;
+  }
+  if (payload?.code === 'NoRoute' || payload?.code === 'NoSegment') return [];
+  if (payload?.code !== 'Ok' || !Array.isArray(payload.routes)) {
+    const error = new Error('The OSRM routing response was malformed.');
+    error.code = 'safer-route/malformed-response';
+    throw error;
+  }
+
+  const candidates = payload.routes.map((route, index) => ({
+    id: `osrm-route-${index + 1}`,
+    distanceMeters: route?.distance,
+    durationSeconds: route?.duration,
+    coordinates: route?.geometry?.type === 'LineString'
+      && Array.isArray(route.geometry.coordinates)
+      ? route.geometry.coordinates.map((point) => Array.isArray(point) && point.length >= 2
+        ? { longitude: point[0], latitude: point[1] } : null)
+      : null,
+  }));
+  if (candidates.length > 0 && !candidates.some(validCandidate)) {
+    const error = new Error('The OSRM routing response contained no valid routes.');
+    error.code = 'safer-route/malformed-response';
+    throw error;
+  }
+  return candidates.filter(validCandidate);
 }
 
 export function getSaferRouteErrorMessage(error) {
   const code = typeof error?.code === 'string' ? error.code.split('/').pop() : '';
   switch (code) {
-    case 'routing-not-configured':
-      return 'Route alternatives are not configured. Enable a Google Directions or Routes API for this app to request real routes.';
     case 'no-routes':
       return 'No route alternatives were returned for this destination.';
+    case 'malformed-response':
+      return 'The routing service returned an invalid response. Try again later.';
     case 'invalid-location':
       return 'Choose a valid current location and destination, then try again.';
     case 'missing-location':
@@ -150,7 +197,8 @@ export function getSaferRouteErrorMessage(error) {
     case 'network-request-failed':
     case 'unavailable':
     case 'deadline-exceeded':
-      return 'Could not fetch route alternatives. Check your connection and try again.';
+    case 'resource-exhausted':
+      return 'Could not fetch route alternatives. Check your connection and try again later.';
     default:
       return 'Could not prepare route suggestions. Please try again.';
   }
