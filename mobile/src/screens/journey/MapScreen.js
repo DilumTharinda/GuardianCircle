@@ -8,7 +8,12 @@ import { getForegroundLocationSnapshot } from '../../services/locationService';
 import { useAuth } from '../../context/AuthContext';
 import { useJourney } from '../../hooks/useJourney';
 import { useUnsafeZones } from '../../hooks/useUnsafeZones';
-import { ARRIVAL_THRESHOLD_METERS, formatElapsed } from '../../utils/journeyMath';
+import {
+  ARRIVAL_THRESHOLD_METERS, formatElapsed, isCoordinate, isFreshJourneyFix,
+} from '../../utils/journeyMath';
+import {
+  getRouteCandidates, getSaferRouteErrorMessage, rankRouteCandidates,
+} from '../../services/saferRouteService';
 import JourneyShareModal from '../../components/journey/JourneyShareModal';
 import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationReportModal';
 
@@ -71,15 +76,20 @@ export default function MapScreen() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState(null);
   const [showUnsafeLayer, setShowUnsafeLayer] = useState(true);
+  const [routePanelOpen, setRoutePanelOpen] = useState(false);
+  const [routeState, setRouteState] = useState({ status: 'idle' });
+  const routeRequestId = useRef(0);
   const requestId = useRef(0);
   const mapRef = useRef(null);
   const mapAvailable = MapView && Marker && Polyline && Platform.OS !== 'web';
   const journey = useJourney(user?.uid, focused);
   const unsafeZones = useUnsafeZones(
     user?.uid,
-    Boolean(mapAvailable && focused && showUnsafeLayer
+    Boolean(mapAvailable && focused && (showUnsafeLayer || routePanelOpen)
       && (locationState.status === 'success' || journey.location)),
   );
+  const unsafeZonesRef = useRef(unsafeZones);
+  unsafeZonesRef.current = unsafeZones;
 
   const loadLocation = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -114,6 +124,61 @@ export default function MapScreen() {
           message: 'Could not open Settings. Open your device settings manually, allow location access, then tap Retry.',
         }));
       }
+    }
+  }
+
+  async function requestSaferRoutes() {
+    const requestId = ++routeRequestId.current;
+    const setCurrentRouteState = (value) => {
+      if (requestId === routeRequestId.current) setRouteState(value);
+    };
+    setRoutePanelOpen(true);
+    setCurrentRouteState({ status: 'loading' });
+    const selectedDestination = journey.phase === 'active'
+      ? journey.journey?.destination : destination;
+    if (!isCoordinate(selectedDestination)) {
+      setCurrentRouteState({ status: 'error', message: 'Choose a destination before requesting a route.' });
+      return;
+    }
+
+    let origin = journey.phase === 'active' && isFreshJourneyFix(journey.location, Date.now())
+      ? journey.location : null;
+    if (!origin) {
+      const snapshot = await getForegroundLocationSnapshot();
+      if (requestId !== routeRequestId.current) return;
+      if (snapshot.status !== 'success' || !isFreshJourneyFix(snapshot, Date.now())) {
+        setCurrentRouteState({
+          status: 'error',
+          message: snapshot.status === 'success'
+            ? 'Get a fresh real GPS position before requesting a route.' : snapshot.message,
+        });
+        return;
+      }
+      origin = snapshot;
+    }
+
+    try {
+      const candidates = await getRouteCandidates(origin, selectedDestination);
+      if (requestId !== routeRequestId.current) return;
+      const latestZones = unsafeZonesRef.current;
+      if (latestZones.status === 'loading') {
+        setCurrentRouteState({ status: 'scoring', candidates });
+        return;
+      }
+      const ranked = rankRouteCandidates(
+        candidates,
+        latestZones.status === 'ready' ? latestZones.points : [],
+      );
+      if (ranked.status !== 'ranked') {
+        setCurrentRouteState({ status: 'no-routes', message: 'No route alternatives were returned for this destination.' });
+        return;
+      }
+      setCurrentRouteState({
+        status: 'ready', ...ranked,
+        reportDataUnavailable: latestZones.status === 'error',
+      });
+    } catch (error) {
+      setCurrentRouteState({ status: 'error', message: getSaferRouteErrorMessage(error) });
     }
   }
 
@@ -155,7 +220,33 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (!focused) setReportOpen(false);
+    if (!focused) {
+      routeRequestId.current += 1;
+      setRoutePanelOpen(false);
+    }
   }, [focused]);
+
+  useEffect(() => {
+    routeRequestId.current += 1;
+    setRouteState({ status: 'idle' });
+    setRoutePanelOpen(false);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (routeState.status !== 'scoring' || unsafeZones.status === 'loading') return;
+    const ranked = rankRouteCandidates(
+      routeState.candidates,
+      unsafeZones.status === 'ready' ? unsafeZones.points : [],
+    );
+    if (ranked.status !== 'ranked') {
+      setRouteState({ status: 'no-routes', message: 'No route alternatives were returned for this destination.' });
+      return;
+    }
+    setRouteState({
+      status: 'ready', ...ranked,
+      reportDataUnavailable: unsafeZones.status === 'error',
+    });
+  }, [routeState.status, routeState.candidates, unsafeZones.status, unsafeZones.points]);
 
   if (!mapAvailable) {
     return (
@@ -259,6 +350,12 @@ export default function MapScreen() {
           <Polyline key={`${index}-${segment[0].timestamp}`} coordinates={segment}
             strokeColor="#1976D2" strokeWidth={5} />
         ) : null)}
+        {routeState.status === 'ready' && routeState.routes.map((route) => (
+          <Polyline key={`suggestion-${route.id}`} coordinates={route.coordinates}
+            strokeColor={route.id === routeState.suggestedRouteId ? '#2E7D32' : '#7E57C2'}
+            strokeWidth={route.id === routeState.suggestedRouteId ? 6 : 4}
+            lineDashPattern={route.id === routeState.suggestedRouteId ? undefined : [8, 6]} />
+        ))}
       </MapView>
 
       <ScrollView style={styles.overlay} contentContainerStyle={styles.overlayContent}
@@ -303,6 +400,10 @@ export default function MapScreen() {
                 action="Try starting again" onPress={() => journey.start(destination, destinationName)} />
             )}
             {journey.persistenceError && <ErrorNotice message={journey.persistenceError} />}
+            {destination && (
+              <TouchableOpacity style={[styles.button, styles.routeButton]} onPress={requestSaferRoutes}
+                accessibilityRole="button"><Text style={styles.buttonText}>Suggest a lower-report route</Text></TouchableOpacity>
+            )}
           </>
         ) : journey.phase === 'starting' ? (
           <View style={styles.inlineRow}>
@@ -335,6 +436,8 @@ export default function MapScreen() {
             }} accessibilityRole="button"><Text style={styles.buttonText}>Share journey update</Text></TouchableOpacity>
             <TouchableOpacity style={[styles.button, styles.endButton]} onPress={confirmEndJourney}
               accessibilityRole="button"><Text style={styles.buttonText}>End journey</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.button, styles.routeButton]} onPress={requestSaferRoutes}
+              accessibilityRole="button"><Text style={styles.buttonText}>Suggest a lower-report route</Text></TouchableOpacity>
           </>
         ) : (
           <>
@@ -356,6 +459,45 @@ export default function MapScreen() {
           nativeHeatmap={nativeHeatmapAvailable}
           visualizationAvailable={Boolean(nativeHeatmapAvailable || Circle)}
           onToggle={() => setShowUnsafeLayer((current) => !current)} />
+        {routePanelOpen && (
+          <View style={styles.routeBox} accessibilityLiveRegion="polite">
+            <View style={styles.heatmapHeader}>
+              <Text style={styles.routeTitle}>Report-based route suggestion</Text>
+              <TouchableOpacity style={styles.linkButton} onPress={() => {
+                routeRequestId.current += 1;
+                setRoutePanelOpen(false);
+              }}
+                accessibilityRole="button"><Text style={styles.linkText}>Close</Text></TouchableOpacity>
+            </View>
+            {routeState.status === 'loading' || routeState.status === 'scoring' ? (
+              <View style={styles.inlineRow}><ActivityIndicator color="#1976D2" />
+                <Text style={styles.routeText}>{routeState.status === 'scoring'
+                  ? 'Comparing route alternatives with user reports...' : 'Checking current location and route availability...'}</Text></View>
+            ) : routeState.status === 'error' || routeState.status === 'no-routes' ? (
+              <Text accessibilityRole="alert" style={styles.routeError}>{routeState.message}</Text>
+            ) : routeState.status === 'ready' ? (
+              <>
+                {routeState.routes.map((route, index) => (
+                  <Text key={route.id} style={styles.routeText}>
+                    {route.id === routeState.suggestedRouteId ? 'Lower report score' : `Alternative ${index + 1}`}
+                    {' · '}{(route.distanceMeters / 1000).toFixed(1)} km · {Math.round(route.durationSeconds / 60)} min
+                    {route.riskScore == null ? ' · report data unavailable' : ` · score ${route.riskScore.toFixed(2)}`}
+                  </Text>
+                ))}
+                {!routeState.hasReportData && (
+                  <Text style={styles.routeText}>
+                    {routeState.reportDataUnavailable
+                      ? 'Unsafe report data could not be loaded for comparison.'
+                      : 'No unsafe reports are available for comparison.'}
+                  </Text>
+                )}
+              </>
+            ) : null}
+            <Text style={styles.routeDisclaimer}>
+              Reports reflect user submissions only. A lower score is not a guarantee that a route is safe.
+            </Text>
+          </View>
+        )}
         {reportNotice && (
           <Text accessibilityLiveRegion="polite" style={styles.reportNotice}>{reportNotice}</Text>
         )}
@@ -552,6 +694,7 @@ const styles = StyleSheet.create({
   shareButton: { backgroundColor: '#1976D2' },
   shareNotice: { color: '#1565C0', fontSize: 12, lineHeight: 17, textAlign: 'center' },
   reportButton: { backgroundColor: '#C62828' },
+  routeButton: { backgroundColor: '#5E35B1' },
   reportNotice: { color: '#2E7D32', fontSize: 12, lineHeight: 17, textAlign: 'center' },
   heatmapBox: { borderWidth: 1, borderColor: '#FFE0B2', backgroundColor: '#FFF8E1',
     borderRadius: 9, padding: 10, marginTop: 4 },
@@ -566,6 +709,12 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 7 },
   legendSwatch: { width: 13, height: 13, borderRadius: 7 },
   legendText: { color: '#6D4C41', fontSize: 11, marginLeft: 3 },
+  routeBox: { borderWidth: 1, borderColor: '#D1C4E9', backgroundColor: '#F3E5F5',
+    borderRadius: 9, padding: 10, marginTop: 4 },
+  routeTitle: { flex: 1, color: '#4527A0', fontSize: 13, fontWeight: '700' },
+  routeText: { color: '#4527A0', fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 5 },
+  routeError: { color: '#B71C1C', fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 6 },
+  routeDisclaimer: { color: '#5E35B1', fontSize: 11, lineHeight: 15, textAlign: 'center', marginTop: 6 },
   errorBox: { borderRadius: 8, padding: 10, backgroundColor: '#FFEBEE' },
   errorText: { color: '#B71C1C', fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });
