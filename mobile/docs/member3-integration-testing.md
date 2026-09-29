@@ -33,7 +33,8 @@
 - The legacy SOS `getCurrentCoordinates()` result contract remains unchanged.
   It still falls back to configured default coordinates if GPS fails; Member 3
   journey, reporting, and route flows use strict real foreground GPS snapshots.
-- Trusted Circle stores phone contacts in `linkedEntities` with `targetUid: null`
-  until verified linking exists. SOS still reads its legacy `LinkedEntities`
-  schema, so current Trusted Circle entries are not automatically SOS recipients.
-  Phone/SMS delivery is not implemented here.
+- SOS preserves legacy linked-parent recipients and now also reads current
+  Trusted Circle contacts through `getTrustedContacts()`. Only active,
+  SOS-enabled contacts with a verified `targetUid` are added; unlinked phone-only
+  contacts cannot be addressed by the UID-based SOS recipient field. No
+  hard-coded recipients or SMS/WhatsApp delivery are used.

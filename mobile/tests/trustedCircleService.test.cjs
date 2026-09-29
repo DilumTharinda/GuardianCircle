@@ -324,3 +324,35 @@ test('live subscriptions forward Firestore errors', () => {
   assert.equal(errors[0], failure);
   unsubscribe();
 });
+
+test('SOS recipient lookup returns only this owner’s active, enabled, verified account UIDs', async () => {
+  const { service, state } = setup();
+  state.queryRows = [
+    ['linked-1', contact({ targetUid: 'trusted-user-1', permissions: { receiveSOS: true } })],
+    ['duplicate', contact({ targetUid: 'trusted-user-1', permissions: { receiveSOS: true } })],
+    ['unlinked', contact({ targetUid: null, permissions: { receiveSOS: true } })],
+    ['disabled', contact({ targetUid: 'disabled-user', permissions: { receiveSOS: false } })],
+    ['pending', contact({ targetUid: 'pending-user', status: 'pending', permissions: { receiveSOS: true } })],
+    ['self', contact({ targetUid: 'owner-1', permissions: { receiveSOS: true } })],
+    ['malformed', contact({ targetUid: 'bad/uid', permissions: { receiveSOS: true } })],
+    ['foreign', contact({ ownerUid: 'owner-2', targetUid: 'foreign-user', permissions: { receiveSOS: true } })],
+    ['wrong-type', contact({ type: 'child', targetUid: 'child-user', permissions: { receiveSOS: true } })],
+  ];
+
+  assert.deepEqual(plain(await service.getTrustedCircleSOSRecipientIds('owner-1')), ['trusted-user-1']);
+  assert.equal(state.reads[0].collection, 'linkedEntities');
+  assert.ok(state.reads[0].constraints.some((entry) => entry.field === 'ownerUid'
+    && entry.operator === '==' && entry.value === 'owner-1'));
+});
+
+test('SOS recipient lookup rejects missing or mismatched authenticated users', async () => {
+  const { service, auth, state } = setup();
+  await assert.rejects(() => service.getTrustedCircleSOSRecipientIds(null), {
+    code: 'trusted-circle/auth-required',
+  });
+  auth.currentUser = { uid: 'owner-2' };
+  await assert.rejects(() => service.getTrustedCircleSOSRecipientIds('owner-1'), {
+    code: 'trusted-circle/session-changed',
+  });
+  assert.equal(state.reads.length, 0);
+});

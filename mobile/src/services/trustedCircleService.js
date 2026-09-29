@@ -89,6 +89,18 @@ export async function getTrustedContacts(uid) {
   return mapContacts(snapshot, uid);
 }
 
+/**
+ * SOS notifications address Firebase users, not contact document IDs or phone
+ * numbers. Include only active, SOS-enabled contacts linked to a verified UID.
+ */
+export async function getTrustedCircleSOSRecipientIds(uid) {
+  const contacts = await getTrustedContacts(uid);
+  return [...new Set(contacts
+    .filter((contact) => contact.status === 'active' && contact.permissions?.receiveSOS === true)
+    .map((contact) => typeof contact.targetUid === 'string' ? contact.targetUid.trim() : '')
+    .filter((targetUid) => targetUid && !targetUid.includes('/') && targetUid !== uid))];
+}
+
 /** Ends the subscription and clears visible contacts on sign-out/account change. */
 export function subscribeTrustedContacts(uid, onContacts, onError) {
   let stopped = false;
