@@ -8,6 +8,7 @@ import { getForegroundLocationSnapshot } from '../../services/locationService';
 import { useAuth } from '../../context/AuthContext';
 import { useJourney } from '../../hooks/useJourney';
 import { ARRIVAL_THRESHOLD_METERS, formatElapsed } from '../../utils/journeyMath';
+import JourneyShareModal from '../../components/journey/JourneyShareModal';
 
 let MapView = null;
 let Marker = null;
@@ -32,6 +33,8 @@ export default function MapScreen() {
   const [locationState, setLocationState] = useState({ status: 'loading' });
   const [destination, setDestination] = useState(null);
   const [destinationName, setDestinationName] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareNotice, setShareNotice] = useState(null);
   const requestId = useRef(0);
   const mapRef = useRef(null);
   const mapAvailable = MapView && Marker && Polyline && Platform.OS !== 'web';
@@ -98,6 +101,10 @@ export default function MapScreen() {
       longitudeDelta: 0.01,
     }, 500);
   }, [journey.location, journey.phase]);
+
+  useEffect(() => {
+    setShareNotice(null);
+  }, [journey.journey?.id]);
 
   if (!mapAvailable) {
     return (
@@ -235,6 +242,7 @@ export default function MapScreen() {
                 {accuracy !== null && <Text style={styles.snapshotText}>Accuracy: about {Math.round(accuracy)} m</Text>}
               </>
             )}
+            <Text style={styles.thresholdText}>Journey sharing becomes available after a journey starts.</Text>
             {journey.loadError && (
               <ErrorNotice message={journey.loadError} action="Retry journey load" onPress={journey.retryLoad} />
             )}
@@ -269,6 +277,10 @@ export default function MapScreen() {
                 <Text style={styles.buttonText}>Resume foreground GPS</Text>
               </TouchableOpacity>
             )}
+            {shareNotice && <Text accessibilityLiveRegion="polite" style={styles.shareNotice}>{shareNotice}</Text>}
+            <TouchableOpacity style={[styles.button, styles.shareButton]} onPress={() => {
+              setShareNotice(null); setShareOpen(true);
+            }} accessibilityRole="button"><Text style={styles.buttonText}>Share journey update</Text></TouchableOpacity>
             <TouchableOpacity style={[styles.button, styles.endButton]} onPress={confirmEndJourney}
               accessibilityRole="button"><Text style={styles.buttonText}>End journey</Text></TouchableOpacity>
           </>
@@ -289,6 +301,10 @@ export default function MapScreen() {
           </>
         )}
       </ScrollView>
+      {shareOpen && (
+        <JourneyShareModal visible uid={user?.uid} journeyState={journey}
+          onClose={() => setShareOpen(false)} onShared={setShareNotice} />
+      )}
     </View>
   );
 }
@@ -396,6 +412,8 @@ const styles = StyleSheet.create({
   statusText: { color: '#2E7D32', fontSize: 14, fontWeight: '600', textAlign: 'center' },
   thresholdText: { color: '#616161', fontSize: 12, lineHeight: 17, textAlign: 'center' },
   endButton: { backgroundColor: '#C62828' },
+  shareButton: { backgroundColor: '#1976D2' },
+  shareNotice: { color: '#1565C0', fontSize: 12, lineHeight: 17, textAlign: 'center' },
   errorBox: { borderRadius: 8, padding: 10, backgroundColor: '#FFEBEE' },
   errorText: { color: '#B71C1C', fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });
