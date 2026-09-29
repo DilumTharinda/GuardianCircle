@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useJourney } from '../../hooks/useJourney';
 import { ARRIVAL_THRESHOLD_METERS, formatElapsed } from '../../utils/journeyMath';
 import JourneyShareModal from '../../components/journey/JourneyShareModal';
+import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationReportModal';
 
 let MapView = null;
 let Marker = null;
@@ -35,6 +36,8 @@ export default function MapScreen() {
   const [destinationName, setDestinationName] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportNotice, setReportNotice] = useState(null);
   const requestId = useRef(0);
   const mapRef = useRef(null);
   const mapAvailable = MapView && Marker && Polyline && Platform.OS !== 'web';
@@ -105,6 +108,15 @@ export default function MapScreen() {
   useEffect(() => {
     setShareNotice(null);
   }, [journey.journey?.id]);
+
+  useEffect(() => {
+    setReportOpen(false);
+    setReportNotice(null);
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!focused) setReportOpen(false);
+  }, [focused]);
 
   if (!mapAvailable) {
     return (
@@ -279,7 +291,7 @@ export default function MapScreen() {
             )}
             {shareNotice && <Text accessibilityLiveRegion="polite" style={styles.shareNotice}>{shareNotice}</Text>}
             <TouchableOpacity style={[styles.button, styles.shareButton]} onPress={() => {
-              setShareNotice(null); setShareOpen(true);
+              setShareNotice(null); setReportOpen(false); setShareOpen(true);
             }} accessibilityRole="button"><Text style={styles.buttonText}>Share journey update</Text></TouchableOpacity>
             <TouchableOpacity style={[styles.button, styles.endButton]} onPress={confirmEndJourney}
               accessibilityRole="button"><Text style={styles.buttonText}>End journey</Text></TouchableOpacity>
@@ -300,10 +312,22 @@ export default function MapScreen() {
             )}
           </>
         )}
+        {reportNotice && (
+          <Text accessibilityLiveRegion="polite" style={styles.reportNotice}>{reportNotice}</Text>
+        )}
+        <TouchableOpacity style={[styles.button, styles.reportButton]} onPress={() => {
+          setReportNotice(null); setShareOpen(false); setReportOpen(true);
+        }} accessibilityRole="button">
+          <Text style={styles.buttonText}>Report unsafe location</Text>
+        </TouchableOpacity>
       </ScrollView>
       {shareOpen && (
         <JourneyShareModal visible uid={user?.uid} journeyState={journey}
           onClose={() => setShareOpen(false)} onShared={setShareNotice} />
+      )}
+      {reportOpen && (
+        <UnsafeLocationReportModal visible uid={user?.uid}
+          onClose={() => setReportOpen(false)} onReported={setReportNotice} />
       )}
     </View>
   );
@@ -414,6 +438,8 @@ const styles = StyleSheet.create({
   endButton: { backgroundColor: '#C62828' },
   shareButton: { backgroundColor: '#1976D2' },
   shareNotice: { color: '#1565C0', fontSize: 12, lineHeight: 17, textAlign: 'center' },
+  reportButton: { backgroundColor: '#C62828' },
+  reportNotice: { color: '#2E7D32', fontSize: 12, lineHeight: 17, textAlign: 'center' },
   errorBox: { borderRadius: 8, padding: 10, backgroundColor: '#FFEBEE' },
   errorText: { color: '#B71C1C', fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });
