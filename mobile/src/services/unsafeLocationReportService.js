@@ -4,6 +4,7 @@ import { auth, db } from './firebase';
 
 export const UNSAFE_REPORTS_COLLECTION = 'reports';
 export const UNSAFE_REPORT_TYPE = 'unsafe_location';
+export const UNSAFE_REPORT_OPEN_STATUS = 'open';
 export const UNSAFE_REPORT_GEOHASH_PRECISION = 9;
 const MAX_LOCATION_AGE_MS = 30 * 1000;
 const MAX_FUTURE_SKEW_MS = 5000;
@@ -104,7 +105,7 @@ export async function createUnsafeLocationReport(uid, input = {}) {
       photoURL: null,
       location: new GeoPoint(location.latitude, location.longitude),
       geohash,
-      status: 'open',
+      status: UNSAFE_REPORT_OPEN_STATUS,
       confidenceScore: 0,
       upvotes: 0,
       createdAt: serverTimestamp(),

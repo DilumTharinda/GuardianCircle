@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, Text,
-  TextInput, TouchableOpacity, View,
+  TextInput, TouchableOpacity, UIManager, View,
 } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { getForegroundLocationSnapshot } from '../../services/locationService';
 import { useAuth } from '../../context/AuthContext';
 import { useJourney } from '../../hooks/useJourney';
+import { useUnsafeZones } from '../../hooks/useUnsafeZones';
 import { ARRIVAL_THRESHOLD_METERS, formatElapsed } from '../../utils/journeyMath';
 import JourneyShareModal from '../../components/journey/JourneyShareModal';
 import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationReportModal';
@@ -14,7 +15,15 @@ import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationRe
 let MapView = null;
 let Marker = null;
 let Polyline = null;
+let Circle = null;
+let Heatmap = null;
 let PROVIDER_GOOGLE = null;
+let nativeHeatmapAvailable = false;
+const HEATMAP_GRADIENT = {
+  colors: ['#FFF176', '#FB8C00', '#E53935'],
+  startPoints: [0.1, 0.5, 1],
+  colorMapSize: 256,
+};
 
 if (Platform.OS !== 'web') {
   try {
@@ -22,11 +31,34 @@ if (Platform.OS !== 'web') {
     MapView = Maps.default || Maps;
     Marker = Maps.Marker;
     Polyline = Maps.Polyline;
+    Circle = Maps.Circle;
+    Heatmap = Maps.Heatmap;
     PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
+    const managerName = Platform.OS === 'android' ? 'AIRMapHeatmap' : 'AIRGoogleMapHeatmap';
+    try {
+      nativeHeatmapAvailable = Boolean(Heatmap && UIManager.getViewManagerConfig?.(managerName));
+    } catch (_) {
+      nativeHeatmapAvailable = false;
+    }
   } catch (e) {
     console.warn('[MapScreen] react-native-maps not loaded, using fallback');
   }
 }
+
+const UnsafeZoneOverlay = React.memo(function UnsafeZoneOverlay({ visible, points }) {
+  if (!visible || points.length === 0) return null;
+  if (nativeHeatmapAvailable) {
+    return <Heatmap points={points} radius={35} opacity={0.55} gradient={HEATMAP_GRADIENT} />;
+  }
+  if (!Circle) return null;
+  return points.map((point) => (
+    <Circle key={`${point.latitude}:${point.longitude}`}
+      center={{ latitude: point.latitude, longitude: point.longitude }}
+      radius={Math.min(300, 90 + Math.sqrt(point.weight) * 35)}
+      fillColor="rgba(229, 57, 53, 0.22)" strokeColor="rgba(183, 28, 28, 0.5)"
+      strokeWidth={1} />
+  ));
+});
 
 export default function MapScreen() {
   const { user } = useAuth();
@@ -38,10 +70,16 @@ export default function MapScreen() {
   const [shareNotice, setShareNotice] = useState(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportNotice, setReportNotice] = useState(null);
+  const [showUnsafeLayer, setShowUnsafeLayer] = useState(true);
   const requestId = useRef(0);
   const mapRef = useRef(null);
   const mapAvailable = MapView && Marker && Polyline && Platform.OS !== 'web';
   const journey = useJourney(user?.uid, focused);
+  const unsafeZones = useUnsafeZones(
+    user?.uid,
+    Boolean(mapAvailable && focused && showUnsafeLayer
+      && (locationState.status === 'success' || journey.location)),
+  );
 
   const loadLocation = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -112,6 +150,7 @@ export default function MapScreen() {
   useEffect(() => {
     setReportOpen(false);
     setReportNotice(null);
+    setShowUnsafeLayer(true);
   }, [user?.uid]);
 
   useEffect(() => {
@@ -205,6 +244,7 @@ export default function MapScreen() {
         }}
         onLongPress={selectDestination}
       >
+        <UnsafeZoneOverlay visible={showUnsafeLayer} points={unsafeZones.points} />
         <Marker
           coordinate={currentCoordinate}
           title={journey.phase === 'active' && journey.tracking !== 'watching'
@@ -312,6 +352,10 @@ export default function MapScreen() {
             )}
           </>
         )}
+        <UnsafeZonePanel zones={unsafeZones} visible={showUnsafeLayer}
+          nativeHeatmap={nativeHeatmapAvailable}
+          visualizationAvailable={Boolean(nativeHeatmapAvailable || Circle)}
+          onToggle={() => setShowUnsafeLayer((current) => !current)} />
         {reportNotice && (
           <Text accessibilityLiveRegion="polite" style={styles.reportNotice}>{reportNotice}</Text>
         )}
@@ -359,6 +403,75 @@ function LocationNotice({ error, openSettings, action, onPress }) {
       <TouchableOpacity style={styles.linkButton} onPress={onPress} accessibilityRole="button">
         <Text style={styles.linkText}>{action}</Text>
       </TouchableOpacity>
+    </View>
+  );
+}
+
+function UnsafeZonePanel({ zones, visible, nativeHeatmap, visualizationAvailable, onToggle }) {
+  const reportLabel = zones.reportCount === 1 ? 'report' : 'reports';
+  return (
+    <View style={styles.heatmapBox}>
+      <View style={styles.heatmapHeader}>
+        <Text style={styles.heatmapTitle}>User-reported safety concerns</Text>
+        <TouchableOpacity style={styles.layerToggle} onPress={onToggle}
+          accessibilityRole="switch" accessibilityState={{ checked: visible }}>
+          <Text style={styles.layerToggleText}>{visible ? 'Hide' : 'Show'}</Text>
+        </TouchableOpacity>
+      </View>
+      {!visible ? (
+        <Text style={styles.heatmapText}>The report-area layer is hidden.</Text>
+      ) : zones.status === 'loading' ? (
+        <View style={styles.inlineRow} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="small" color="#E53935" />
+          <Text style={styles.heatmapText}>Loading user-submitted reports...</Text>
+        </View>
+      ) : zones.status === 'error' ? (
+        <ErrorNotice message={zones.error} action="Retry report layer" onPress={zones.retry} />
+      ) : zones.status === 'empty' ? (
+        <>
+          <Text style={styles.heatmapText}>
+            {zones.fromCache
+              ? 'No cached reports are available. Reconnect and refresh to check for updates.'
+              : 'No open user-submitted reports are available to display.'}
+          </Text>
+          <TouchableOpacity style={styles.linkButton} onPress={zones.retry} accessibilityRole="button">
+            <Text style={styles.linkText}>Refresh reports</Text>
+          </TouchableOpacity>
+        </>
+      ) : !visualizationAvailable ? (
+        <Text accessibilityRole="alert" style={styles.errorText}>
+          Report-area visualization is unavailable in this app build.
+        </Text>
+      ) : zones.status === 'ready' ? (
+        <>
+          <Text style={styles.heatmapText}>
+            {zones.reportCount} open {reportLabel} loaded as {nativeHeatmap ? 'heat shading' : 'coarse density areas'}.
+          </Text>
+          <View style={styles.legendRow} accessibilityLabel="Stronger shading means more reports nearby">
+            <View style={[styles.legendSwatch, { backgroundColor: '#FFF176' }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: '#FB8C00' }]} />
+            <View style={[styles.legendSwatch, { backgroundColor: '#E53935' }]} />
+            <Text style={styles.legendText}>More reports nearby</Text>
+          </View>
+          {zones.fromCache && (
+            <Text style={styles.heatmapMeta}>Showing cached reports while Firestore reconnects.</Text>
+          )}
+          {zones.truncated && (
+            <Text style={styles.heatmapMeta}>A capped view is shown to keep the map responsive.</Text>
+          )}
+          {Number.isFinite(zones.updatedAtMs) && (
+            <Text style={styles.heatmapMeta}>
+              Updates automatically. Last update {new Date(zones.updatedAtMs).toLocaleTimeString()}.
+            </Text>
+          )}
+          <TouchableOpacity style={styles.linkButton} onPress={zones.retry} accessibilityRole="button">
+            <Text style={styles.linkText}>Refresh reports</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
+      <Text style={styles.heatmapDisclaimer}>
+        Reports are user-submitted and do not determine whether an area is safe or unsafe.
+      </Text>
     </View>
   );
 }
@@ -440,6 +553,19 @@ const styles = StyleSheet.create({
   shareNotice: { color: '#1565C0', fontSize: 12, lineHeight: 17, textAlign: 'center' },
   reportButton: { backgroundColor: '#C62828' },
   reportNotice: { color: '#2E7D32', fontSize: 12, lineHeight: 17, textAlign: 'center' },
+  heatmapBox: { borderWidth: 1, borderColor: '#FFE0B2', backgroundColor: '#FFF8E1',
+    borderRadius: 9, padding: 10, marginTop: 4 },
+  heatmapHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  heatmapTitle: { flex: 1, color: '#5D4037', fontSize: 13, fontWeight: '700' },
+  heatmapText: { color: '#5D4037', fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 6 },
+  heatmapMeta: { color: '#795548', fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 4 },
+  heatmapDisclaimer: { color: '#6D4C41', fontSize: 11, lineHeight: 15, textAlign: 'center', marginTop: 6 },
+  layerToggle: { minHeight: 34, minWidth: 52, borderWidth: 1, borderColor: '#C62828',
+    borderRadius: 8, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  layerToggleText: { color: '#B71C1C', fontSize: 12, fontWeight: '700' },
+  legendRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 7 },
+  legendSwatch: { width: 13, height: 13, borderRadius: 7 },
+  legendText: { color: '#6D4C41', fontSize: 11, marginLeft: 3 },
   errorBox: { borderRadius: 8, padding: 10, backgroundColor: '#FFEBEE' },
   errorText: { color: '#B71C1C', fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });
