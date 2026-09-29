@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, Text,
+  ActivityIndicator, Alert, AppState, Linking, Platform, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, UIManager, View,
 } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
@@ -80,6 +80,7 @@ export default function MapScreen() {
   const [routeState, setRouteState] = useState({ status: 'idle' });
   const routeRequestId = useRef(0);
   const requestId = useRef(0);
+  const appState = useRef(AppState.currentState);
   const mapRef = useRef(null);
   const mapAvailable = MapView && Marker && Polyline && Platform.OS !== 'web';
   const journey = useJourney(user?.uid, focused);
@@ -109,9 +110,21 @@ export default function MapScreen() {
       loadLocation();
       return () => {
         requestId.current += 1;
+        routeRequestId.current += 1;
       };
     }, [loadLocation, mapAvailable])
   );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const returnedFromBackground = appState.current === 'background' && nextState === 'active';
+      appState.current = nextState;
+      if (returnedFromBackground && focused && !['active', 'starting'].includes(journey.phase)) {
+        loadLocation();
+      }
+    });
+    return () => subscription.remove();
+  }, [focused, journey.phase, loadLocation]);
 
   async function openSettings() {
     const currentRequest = requestId.current;
@@ -219,7 +232,10 @@ export default function MapScreen() {
   }, [user?.uid]);
 
   useEffect(() => {
-    if (!focused) setReportOpen(false);
+    if (!focused) {
+      setReportOpen(false);
+      setShareOpen(false);
+    }
     if (!focused) {
       routeRequestId.current += 1;
       setRoutePanelOpen(false);
