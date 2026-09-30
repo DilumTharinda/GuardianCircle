@@ -18,11 +18,6 @@ export default function LostFoundScreen({ navigation }) {
   const [matches, setMatches] = useState([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
-  // Loads matches where the current user is EITHER the lost-item
-  // reporter OR the found-item reporter. Firestore can't check two
-  // different fields for "equals my ID" in a single query, so we run
-  // two small queries (each capped at 10 reads) and merge the results
-  // ourselves — this keeps total reads low and predictable.
   async function fetchMyMatches() {
     setLoadingMatches(true);
     try {
@@ -60,8 +55,6 @@ export default function LostFoundScreen({ navigation }) {
     }
   }
 
-  // Refresh the matches list every time this screen comes into view
-  // (e.g. after submitting a new report that created a match).
   useFocusEffect(
     useCallback(() => {
       fetchMyMatches();
@@ -85,6 +78,13 @@ export default function LostFoundScreen({ navigation }) {
         onPress={() => navigation.navigate(ROUTES.REPORT_FOUND)}
       >
         <Text style={styles.foundButtonText}>+ Report Found Item</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.communityButton}
+        onPress={() => navigation.navigate(ROUTES.COMMUNITY_FEED)}
+      >
+        <Text style={styles.communityButtonText}>👥 Browse Community Reports</Text>
       </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>My Matches</Text>
@@ -145,9 +145,17 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   foundButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  communityButton: {
+    backgroundColor: '#1565C0',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  communityButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',

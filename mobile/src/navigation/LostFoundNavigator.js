@@ -5,6 +5,7 @@ import LostFoundScreen from '../screens/lostfound/LostFoundScreen';
 import ReportLostScreen from '../screens/lostfound/ReportLostScreen';
 import ReportFoundScreen from '../screens/lostfound/ReportFoundScreen';
 import MatchChatScreen from '../screens/lostfound/MatchChatScreen';
+import CommunityFeedScreen from '../screens/lostfound/CommunityFeedScreen';
 
 const Stack = createStackNavigator();
 
@@ -36,6 +37,11 @@ export default function LostFoundNavigator() {
         name={ROUTES.MATCH_CHAT}
         component={MatchChatScreen}
         options={{ title: 'Chat' }}
+      />
+      <Stack.Screen
+        name={ROUTES.COMMUNITY_FEED}
+        component={CommunityFeedScreen}
+        options={{ title: 'Community Reports' }}
       />
     </Stack.Navigator>
   );
