@@ -28,6 +28,7 @@ import {
 import { db } from '../../services/firebase';
 import { uploadImage } from '../../services/cloudinaryService';
 import { useAuth } from '../../context/AuthContext';
+import { findMatchesForFoundReport } from '../../services/matchingService';
 
 export default function ReportFoundScreen({ navigation }) {
   const { user } = useAuth();
@@ -124,6 +125,25 @@ export default function ReportFoundScreen({ navigation }) {
     }
   }
 
+  // Creates one "matches" record linking a found report to a candidate
+  // lost report. Stores BOTH reporters' user IDs directly on the match
+  // doc, so later we can find "matches involving me" with a simple
+  // query, instead of doing extra Firestore reads.
+  async function createMatchRecord(lostReport, foundReportId) {
+    await addDoc(collection(db, 'matches'), {
+      lostReportId: lostReport.id,
+      foundReportId,
+      lostReporterId: lostReport.reportedBy,
+      foundReporterId: user.uid,
+      status: 'suggested',
+      createdAt: serverTimestamp(),
+    });
+
+    await updateDoc(doc(db, 'reports', lostReport.id), {
+      status: 'sighted',
+    });
+  }
+
   async function handleSubmit() {
     if (!description || !location) {
       Alert.alert(
@@ -141,8 +161,7 @@ export default function ReportFoundScreen({ navigation }) {
         photoUrl = uploadResult.url;
       }
 
-      // 1. Create the found/sighting report
-      const foundReportRef = await addDoc(collection(db, 'reports'), {
+      const foundReportData = {
         type: 'found',
         description,
         photoUrl,
@@ -155,26 +174,42 @@ export default function ReportFoundScreen({ navigation }) {
         reportedBy: user.uid,
         confidenceScore: 0,
         createdAt: serverTimestamp(),
-      });
+      };
 
-      // 2. If linked to a specific lost report, create a match record
-      //    and update the lost report's status so the original reporter sees it.
-      //    (Actual push notification to the reporter is handled by the
-      //    team's FCM/notifications setup, not by this screen directly.)
+      const foundReportRef = await addDoc(
+        collection(db, 'reports'),
+        foundReportData
+      );
+
+      let matchCount = 0;
+
       if (isLinkedToLost && selectedLostReport) {
-        await addDoc(collection(db, 'matches'), {
-          lostReportId: selectedLostReport.id,
-          foundReportId: foundReportRef.id,
-          status: 'suggested',
-          createdAt: serverTimestamp(),
-        });
+        await createMatchRecord(selectedLostReport, foundReportRef.id);
+        matchCount = 1;
+      } else {
+        const suggestedMatches = await findMatchesForFoundReport(
+          foundReportData,
+          3
+        );
 
-        await updateDoc(doc(db, 'reports', selectedLostReport.id), {
-          status: 'sighted',
-        });
+        for (const candidate of suggestedMatches) {
+          await createMatchRecord(candidate, foundReportRef.id);
+        }
+        matchCount = suggestedMatches.length;
       }
 
-      Alert.alert('Success', 'Your found item report has been submitted.');
+      if (matchCount > 0) {
+        Alert.alert(
+          'Success',
+          `Your found item report has been submitted. ${matchCount} possible match(es) found!`
+        );
+      } else {
+        Alert.alert(
+          'Success',
+          'Your found item report has been submitted. No matching lost reports found yet.'
+        );
+      }
+
       navigation.goBack();
     } catch (error) {
       Alert.alert('Error', error.message);
