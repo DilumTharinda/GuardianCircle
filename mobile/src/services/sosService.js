@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from './firebase';
 import { getCurrentCoordinates } from './locationService';
 import { isChild } from '../constants/roles';
+import { getTrustedCircleSOSRecipientIds } from './trustedCircleService';
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
 
@@ -69,23 +70,20 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
       console.warn('[sosService] LinkedEntities query fallback:', dbErr);
     }
 
-    // Also check local AsyncStorage cache for mock trusted contacts / parents
-    const localContactsRaw = await AsyncStorage.getItem('@guardiancircle_trusted_contacts');
-    if (localContactsRaw) {
-      const localContacts = JSON.parse(localContactsRaw);
-      localContacts.forEach((c) => {
-        if (c.id && !recipientIds.includes(c.id)) {
-          recipientIds.push(c.id);
-        }
-      });
-    }
-
-    // Default fallback contacts for safety demo if empty
-    if (recipientIds.length === 0) {
-      recipientIds.push('contact_emergency_lead_01', 'contact_campus_security_02');
-    }
   } catch (err) {
     console.warn('[sosService] Error gathering recipients:', err);
+  }
+
+  // Current FR-1.11 contacts are owner-scoped in `linkedEntities`. Only their
+  // verified target UIDs are valid SOS recipients; never use contact IDs or
+  // phone numbers as account recipients. Keep legacy linked parent recipients.
+  try {
+    const trustedRecipientIds = await getTrustedCircleSOSRecipientIds(uid);
+    trustedRecipientIds.forEach((recipientId) => {
+      if (!recipientIds.includes(recipientId)) recipientIds.push(recipientId);
+    });
+  } catch (error) {
+    console.warn('[sosService] Trusted Circle recipient lookup unavailable:', error);
   }
 
   // 3. Capture high-accuracy GPS coordinates & address
