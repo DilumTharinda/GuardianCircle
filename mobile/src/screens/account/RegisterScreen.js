@@ -35,7 +35,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { SELECTABLE_ROLES, ROLES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 const TOTAL_STEPS = 3;
@@ -74,6 +75,7 @@ function RoleIcon({ iconLib, icon, size, color }) {
 export default function RegisterScreen() {
   const navigation = useNavigation();
   const { register, loginWithGoogle } = useAuth();
+  const { colors } = useTheme();
 
   // Form state
   const [step, setStep] = useState(1);
@@ -256,14 +258,16 @@ export default function RegisterScreen() {
     outputRange: ['0%', '100%'],
   });
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
 
       {/* Animated dark green header */}
       <Animated.View style={[styles.headerWrapper, { height: headerHeightAnim }]}>
         <LinearGradient
-          colors={[COLORS.darkGreen, COLORS.darkGreenMid]}
+          colors={[colors.darkGreen, colors.darkGreenMid]}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -338,13 +342,13 @@ export default function RegisterScreen() {
                     <Ionicons
                       name="person-outline"
                       size={18}
-                      color={focusedField === 'name' ? COLORS.darkGreenMid : COLORS.textMuted}
+                      color={focusedField === 'name' ? colors.darkGreenMid : colors.textMuted}
                       style={styles.inputIcon}
                     />
                     <TextInput
                       style={styles.input}
                       placeholder="e.g. Amal Perera"
-                      placeholderTextColor={COLORS.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       value={displayName}
                       onChangeText={setDisplayName}
                       onFocus={() => setFocusedField('name')}
@@ -388,13 +392,13 @@ export default function RegisterScreen() {
                     <Ionicons
                       name="mail-outline"
                       size={18}
-                      color={focusedField === 'email' ? COLORS.darkGreenMid : COLORS.textMuted}
+                      color={focusedField === 'email' ? colors.darkGreenMid : colors.textMuted}
                       style={styles.inputIcon}
                     />
                     <TextInput
                       style={styles.input}
                       placeholder="you@example.com"
-                      placeholderTextColor={COLORS.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       value={email}
                       onChangeText={setEmail}
                       onFocus={() => setFocusedField('email')}
@@ -416,13 +420,13 @@ export default function RegisterScreen() {
                     <Ionicons
                       name="lock-closed-outline"
                       size={18}
-                      color={focusedField === 'password' ? COLORS.darkGreenMid : COLORS.textMuted}
+                      color={focusedField === 'password' ? colors.darkGreenMid : colors.textMuted}
                       style={styles.inputIcon}
                     />
                     <TextInput
                       style={styles.input}
                       placeholder="Min. 8 chars, 1 uppercase, 1 number"
-                      placeholderTextColor={COLORS.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       value={password}
                       onChangeText={setPassword}
                       onFocus={() => setFocusedField('password')}
@@ -434,7 +438,7 @@ export default function RegisterScreen() {
                       <Ionicons
                         name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                         size={20}
-                        color={COLORS.textMuted}
+                        color={colors.textMuted}
                       />
                     </TouchableOpacity>
                   </View>
@@ -450,13 +454,13 @@ export default function RegisterScreen() {
                     <Ionicons
                       name="lock-closed-outline"
                       size={18}
-                      color={focusedField === 'confirm' ? COLORS.darkGreenMid : COLORS.textMuted}
+                      color={focusedField === 'confirm' ? colors.darkGreenMid : colors.textMuted}
                       style={styles.inputIcon}
                     />
                     <TextInput
                       style={styles.input}
                       placeholder="Re-enter your password"
-                      placeholderTextColor={COLORS.textMuted}
+                      placeholderTextColor={colors.textMuted}
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
                       onFocus={() => setFocusedField('confirm')}
@@ -466,7 +470,7 @@ export default function RegisterScreen() {
                       onSubmitEditing={handleNext}
                     />
                     {confirmPassword && password === confirmPassword && (
-                      <Ionicons name="checkmark-circle" size={20} color={COLORS.accentGreen} />
+                      <Ionicons name="checkmark-circle" size={20} color={colors.accentGreen} />
                     )}
                   </View>
                 </View>
@@ -519,7 +523,7 @@ export default function RegisterScreen() {
                 disabled={loading}
               >
                 <LinearGradient
-                  colors={[COLORS.darkGreenMid, COLORS.darkGreen]}
+                  colors={[colors.darkGreenMid, colors.darkGreen]}
                   style={styles.primaryButtonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -557,6 +561,7 @@ export default function RegisterScreen() {
 // ── Sub-components ──────────────────────────────────────────────
 
 function RoleCard({ iconLib, icon, label, desc, selected, onPress }) {
+  const { colors } = useTheme();
   const scaleAnim  = useRef(new Animated.Value(1)).current;
   const borderAnim = useRef(new Animated.Value(selected ? 1 : 0)).current;
 
@@ -577,13 +582,15 @@ function RoleCard({ iconLib, icon, label, desc, selected, onPress }) {
 
   const borderColor = borderAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.border, COLORS.darkGreenMid],
+    outputRange: [colors.border, colors.darkGreenMid],
   });
 
   const backgroundColor = borderAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.cardBackground, COLORS.darkGreenSurface],
+    outputRange: [colors.cardBackground, colors.darkGreenSurface],
   });
+
+  const styles = getStyles(colors);
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
@@ -603,7 +610,7 @@ function RoleCard({ iconLib, icon, label, desc, selected, onPress }) {
             iconLib={iconLib}
             icon={icon}
             size={22}
-            color={selected ? COLORS.darkGreenMid : COLORS.textMuted}
+            color={selected ? colors.darkGreenMid : colors.textMuted}
           />
         </View>
         <View style={styles.roleTextBlock}>
@@ -623,6 +630,7 @@ function RoleCard({ iconLib, icon, label, desc, selected, onPress }) {
 }
 
 function PasswordStrengthBar({ password }) {
+  const { colors } = useTheme();
   let strength = 0;
   if (password.length >= 8) strength++;
   if (/[A-Z]/.test(password)) strength++;
@@ -630,7 +638,9 @@ function PasswordStrengthBar({ password }) {
   if (/[^A-Za-z0-9]/.test(password)) strength++;
 
   const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-  const barColors = ['', '#EF4444', '#F59E0B', '#3B82F6', COLORS.darkGreenMid];
+  const barColors = ['', '#EF4444', '#F59E0B', '#3B82F6', colors.darkGreenMid];
+
+  const styles = getStyles(colors);
 
   return (
     <View style={styles.strengthContainer}>
@@ -640,7 +650,7 @@ function PasswordStrengthBar({ password }) {
             key={i}
             style={[
               styles.strengthSegment,
-              { backgroundColor: i <= strength ? barColors[strength] : COLORS.border },
+              { backgroundColor: i <= strength ? barColors[strength] : colors.border },
             ]}
           />
         ))}
@@ -652,8 +662,8 @@ function PasswordStrengthBar({ password }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
 
   // Header
@@ -706,7 +716,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 40,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
   },
@@ -719,7 +729,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
   },
   formCard: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: colors.cardBackground,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
   },
@@ -728,12 +738,12 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: FONTS.xl,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   stepSubtitle: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginBottom: SPACING.lg,
     lineHeight: 20,
   },
@@ -747,7 +757,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.dangerRed,
+    borderLeftColor: colors.dangerRed,
   },
   errorText: {
     flex: 1,
@@ -761,32 +771,32 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     height: 52,
   },
   inputWrapperFocused: {
-    borderColor: COLORS.darkGreenMid,
-    backgroundColor: COLORS.darkGreenSurface,
+    borderColor: colors.darkGreenMid,
+    backgroundColor: colors.darkGreenSurface,
   },
   inputWrapperError: {
-    borderColor: COLORS.dangerRed,
+    borderColor: colors.dangerRed,
     backgroundColor: '#FEF2F2',
   },
   inputIcon: { marginRight: SPACING.sm },
   input: {
     flex: 1,
     fontSize: FONTS.base,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     height: '100%',
   },
 
@@ -821,28 +831,28 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  roleIconBgSelected: { backgroundColor: COLORS.safeGreenLight },
+  roleIconBgSelected: { backgroundColor: colors.safeGreenLight },
   roleTextBlock: { flex: 1 },
   roleLabel: {
     fontSize: FONTS.base,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
-  roleLabelSelected: { color: COLORS.darkGreen },
+  roleLabelSelected: { color: colors.darkGreen },
   roleDesc: {
     fontSize: FONTS.xs,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   roleCheckmark: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: COLORS.darkGreenMid,
+    backgroundColor: colors.darkGreenMid,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -854,8 +864,8 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.lg,
     gap: SPACING.sm,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { fontSize: FONTS.sm, color: COLORS.textMuted },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { fontSize: FONTS.sm, color: colors.textMuted },
 
   // Google
   googleButton: {
@@ -865,7 +875,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     gap: SPACING.sm,
     marginBottom: SPACING.lg,
   },
@@ -877,7 +887,7 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.medium,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
 
   // Button
@@ -902,6 +912,6 @@ const styles = StyleSheet.create({
 
   // Login link
   loginRow: { flexDirection: 'row', justifyContent: 'center' },
-  loginPrompt: { fontSize: FONTS.sm, color: COLORS.textSecondary },
-  loginLink: { fontSize: FONTS.sm, fontWeight: FONTS.bold, color: COLORS.darkGreenMid },
+  loginPrompt: { fontSize: FONTS.sm, color: colors.textSecondary },
+  loginLink: { fontSize: FONTS.sm, fontWeight: FONTS.bold, color: colors.darkGreenMid },
 });

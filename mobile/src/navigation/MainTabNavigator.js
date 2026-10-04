@@ -2,9 +2,9 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { isChild, isParent } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
-import { COLORS } from '../constants/theme';
 import ThemeToggle from '../components/ThemeToggle';
 
 // Import screens
@@ -28,6 +28,7 @@ const TAB_ICONS = {
 
 export default function MainTabNavigator() {
   const { userProfile } = useAuth();
+  const { colors } = useTheme();
   const childMode = userProfile && isChild(userProfile.role);
   const parentMode = userProfile && isParent(userProfile.role);
 
@@ -39,12 +40,12 @@ export default function MainTabNavigator() {
           const iconName = focused ? icons.active : icons.inactive;
           return <Ionicons name={iconName} size={focused ? 24 : 22} color={color} />;
         },
-        tabBarActiveTintColor: COLORS.darkGreenMid,
-        tabBarInactiveTintColor: COLORS.textMuted,
+        tabBarActiveTintColor: colors.darkGreenMid,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: COLORS.surface,
+          backgroundColor: colors.surface,
           borderTopWidth: 1,
-          borderTopColor: COLORS.border,
+          borderTopColor: colors.border,
           paddingBottom: 6,
           paddingTop: 4,
           height: 62,
@@ -54,7 +55,7 @@ export default function MainTabNavigator() {
           fontWeight: '600',
           marginTop: 0,
         },
-        headerStyle: { backgroundColor: COLORS.darkGreen },
+        headerStyle: { backgroundColor: colors.darkGreen },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
         headerRight: () => <ThemeToggle style={{ marginRight: 15 }} iconColor="#fff" />,
