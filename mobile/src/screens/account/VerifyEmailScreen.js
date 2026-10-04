@@ -11,10 +11,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export default function VerifyEmailScreen() {
   const { user, reloadUser, resendVerificationEmail, logout } = useAuth();
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
@@ -57,14 +59,16 @@ export default function VerifyEmailScreen() {
     }
   }
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
       
       <View style={styles.content}>
         <View style={[styles.card, SHADOWS.card]}>
           <View style={styles.iconContainer}>
-            <Ionicons name="mail-unread-outline" size={60} color={COLORS.darkGreenMid} />
+            <Ionicons name="mail-unread-outline" size={60} color={colors.darkGreenMid} />
           </View>
           
           <Text style={styles.titleText}>Verify Your Email</Text>
@@ -85,7 +89,7 @@ export default function VerifyEmailScreen() {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={[COLORS.darkGreenMid, COLORS.darkGreen]}
+              colors={[colors.darkGreenMid, colors.darkGreen]}
               style={styles.primaryButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -104,7 +108,7 @@ export default function VerifyEmailScreen() {
             disabled={resendLoading || loading}
           >
             {resendLoading ? (
-              <ActivityIndicator color={COLORS.darkGreenMid} size="small" />
+              <ActivityIndicator color={colors.darkGreenMid} size="small" />
             ) : (
               <Text style={styles.secondaryButtonText}>Resend Link</Text>
             )}
@@ -113,7 +117,7 @@ export default function VerifyEmailScreen() {
           <View style={styles.divider} />
 
           <TouchableOpacity style={styles.logoutRow} onPress={logout}>
-            <Ionicons name="log-out-outline" size={18} color={COLORS.dangerRed} />
+            <Ionicons name="log-out-outline" size={18} color={colors.dangerRed} />
             <Text style={styles.logoutText}>Sign Out / Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -122,15 +126,15 @@ export default function VerifyEmailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: SPACING.base,
   },
   card: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: colors.cardBackground,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     alignItems: 'center',
@@ -139,7 +143,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: COLORS.darkGreenSurface,
+    backgroundColor: colors.darkGreenSurface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: SPACING.lg,
@@ -147,25 +151,25 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: FONTS.xl,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.md,
     textAlign: 'center',
   },
   subText: {
     fontSize: FONTS.base,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   emailText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.bold,
-    color: COLORS.darkGreen,
+    color: colors.darkGreen,
     marginVertical: SPACING.xs,
     textAlign: 'center',
   },
   instructionText: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginVertical: SPACING.lg,
@@ -195,18 +199,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
-    borderColor: COLORS.darkGreenMid,
+    borderColor: colors.darkGreenMid,
     marginBottom: SPACING.lg,
   },
   secondaryButtonText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.bold,
-    color: COLORS.darkGreenMid,
+    color: colors.darkGreenMid,
   },
   divider: {
     width: '100%',
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: colors.border,
     marginBottom: SPACING.lg,
   },
   logoutRow: {
@@ -218,7 +222,7 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     fontSize: FONTS.base,
-    color: COLORS.dangerRed,
+    color: colors.dangerRed,
     fontWeight: FONTS.semiBold,
   },
 });

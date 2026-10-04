@@ -25,13 +25,15 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS, FONTS, SPACING } from '../../constants/theme';
+import { FONTS, SPACING } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 const RING_SIZE = 180;
 const SHIELD_SIZE = 100;
 
 export default function SplashScreen() {
+  const { colors } = useTheme();
   // Background
   const bgOpacity    = useRef(new Animated.Value(0)).current;
 
@@ -165,13 +167,15 @@ export default function SplashScreen() {
     outputRange: ['0%', '100%'],
   });
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
 
       <Animated.View style={[styles.fill, { opacity: bgOpacity }]}>
         <LinearGradient
-          colors={[COLORS.darkGreen, COLORS.darkGreenMid, '#1A4B1F']}
+          colors={[colors.darkGreen, colors.darkGreenMid, '#1A4B1F']}
           style={styles.fill}
           start={{ x: 0.1, y: 0 }}
           end={{ x: 0.9, y: 1 }}
@@ -253,8 +257,8 @@ export default function SplashScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.darkGreen },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.darkGreen },
   fill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // ── Logo cluster ──

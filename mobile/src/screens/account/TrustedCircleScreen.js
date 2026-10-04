@@ -4,7 +4,7 @@ import {
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { useTrustedContacts } from '../../hooks/useTrustedContacts';
 import {
   addTrustedContact, deleteTrustedContact, getTrustedCircleErrorMessage,
@@ -13,7 +13,8 @@ import {
 
 const EMPTY_FORM = { targetName: '', targetPhone: '', relationship: '' };
 
-function Button({ title, onPress, disabled, secondary, accessibilityLabel }) {
+function Button({ title, onPress, disabled, secondary, accessibilityLabel, colors }) {
+  const styles = getStyles(colors);
   return (
     <TouchableOpacity
       accessibilityRole="button"
@@ -28,11 +29,12 @@ function Button({ title, onPress, disabled, secondary, accessibilityLabel }) {
   );
 }
 
-function Field({ label, error, ...props }) {
+function Field({ label, error, colors, ...props }) {
+  const styles = getStyles(colors);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput accessibilityLabel={label} placeholderTextColor={COLORS.textSecondary}
+      <TextInput accessibilityLabel={label} placeholderTextColor={colors.textSecondary}
         style={[styles.input, error && styles.invalidInput]} {...props} />
       {error ? <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text> : null}
     </View>
@@ -40,6 +42,8 @@ function Field({ label, error, ...props }) {
 }
 
 function TrustedCircleContent({ uid }) {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
   const { contacts, loading, error, retry } = useTrustedContacts(uid);
   const [editor, setEditor] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -126,17 +130,17 @@ function TrustedCircleContent({ uid }) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Trusted Circle</Text>
         <Text style={styles.subtitle}>Manage the people you can contact in an emergency.</Text>
-        <Button title="Add contact" onPress={() => openEditor(null)} disabled={unavailable} />
+        <Button title="Add contact" onPress={() => openEditor(null)} disabled={unavailable} colors={colors} />
         {notice && !error ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
         {loading ? (
           <View style={styles.state}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.subtitle}>Loading trusted contacts...</Text>
           </View>
         ) : error ? (
           <View style={styles.state}>
             <Text accessibilityRole="alert" style={styles.errorText}>{error}</Text>
-            <Button title="Retry" onPress={retry} secondary />
+            <Button title="Retry" onPress={retry} secondary colors={colors} />
           </View>
         ) : contacts.length === 0 ? (
           <View style={styles.state}>
@@ -154,13 +158,13 @@ function TrustedCircleContent({ uid }) {
                 {contact.status === 'pending' ? <Text style={styles.relationship}>Pending connection</Text> : null}
                 <View style={styles.actions}>
                   <Button title="Edit" accessibilityLabel={`Edit ${contact.targetName}`} secondary
-                    disabled={busy} onPress={() => openEditor(contact)} />
+                    disabled={busy} onPress={() => openEditor(contact)} colors={colors} />
                   <Button title="Delete" accessibilityLabel={`Delete ${contact.targetName}`} secondary
                     disabled={busy} onPress={() => {
                       setDeleting(contact);
                       setActionError(null);
                       setNotice(null);
-                    }} />
+                    }} colors={colors} />
                 </View>
               </View>
             ))}
@@ -180,14 +184,14 @@ function TrustedCircleContent({ uid }) {
                 <>
                   <Field label="Name (required)" value={form.targetName} autoCapitalize="words"
                     placeholder="Contact name" maxLength={80} editable={!busy}
-                    onChangeText={(value) => changeField('targetName', value)} error={fieldErrors.targetName} />
+                    onChangeText={(value) => changeField('targetName', value)} error={fieldErrors.targetName} colors={colors} />
                   <Field label="Phone number (required)" value={form.targetPhone} keyboardType="phone-pad"
                     placeholder="e.g. +94 77 123 4567" maxLength={40} editable={!busy}
-                    onChangeText={(value) => changeField('targetPhone', value)} error={fieldErrors.targetPhone} />
+                    onChangeText={(value) => changeField('targetPhone', value)} error={fieldErrors.targetPhone} colors={colors} />
                   <Text style={styles.hint}>Include the country code where possible.</Text>
                   <Field label="Relationship (optional)" value={form.relationship} autoCapitalize="words"
                     placeholder="e.g. Parent, friend, neighbour" maxLength={40} editable={!busy}
-                    onChangeText={(value) => changeField('relationship', value)} error={fieldErrors.relationship} />
+                    onChangeText={(value) => changeField('relationship', value)} error={fieldErrors.relationship} colors={colors} />
                 </>
               )}
               {actionError || error ? (
@@ -195,16 +199,16 @@ function TrustedCircleContent({ uid }) {
               ) : null}
               {busy ? (
                 <View style={styles.saving}>
-                  <ActivityIndicator color={COLORS.primary} />
+                  <ActivityIndicator color={colors.primary} />
                   <Text style={styles.hint}>Saving changes...</Text>
                 </View>
               ) : null}
               <View style={styles.actions}>
-                <Button title="Cancel" onPress={closeDialog} disabled={busy} secondary />
+                <Button title="Cancel" onPress={closeDialog} disabled={busy} secondary colors={colors} />
                 <Button title={deleting ? 'Delete contact' : 'Save contact'} disabled={unavailable}
                   onPress={deleting
                     ? () => performAction(() => deleteTrustedContact(uid, deleting.id), 'Contact deleted.')
-                    : saveContact} />
+                    : saveContact} colors={colors} />
               </View>
             </ScrollView>
           </View>
@@ -216,45 +220,48 @@ function TrustedCircleContent({ uid }) {
 
 export default function TrustedCircleScreen() {
   const { user, loading } = useAuth();
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
   if (loading) {
-    return <View style={styles.state}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+    return <View style={styles.state}><ActivityIndicator size="large" color={colors.primary} /></View>;
   }
   // Remount local form/mutation state when accounts change.
   return <TrustedCircleContent key={user?.uid || 'signed-out'} uid={user?.uid} />;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, paddingBottom: 40, flexGrow: 1 },
-  title: { fontSize: 26, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 8 },
-  subtitle: { fontSize: 16, color: COLORS.textSecondary, lineHeight: 23, marginVertical: 12 },
+  title: { fontSize: 26, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  subtitle: { fontSize: 16, color: colors.textSecondary, lineHeight: 23, marginVertical: 12 },
   button: { minHeight: 46, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 10,
-    backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { fontSize: 16, fontWeight: '600', color: COLORS.card },
-  secondaryButton: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.primary },
-  secondaryButtonText: { color: COLORS.primaryDark },
+    backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  buttonText: { fontSize: 16, fontWeight: '600', color: colors.card },
+  secondaryButton: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary },
+  secondaryButtonText: { color: colors.primaryDark },
   disabled: { opacity: 0.5 },
   state: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
   list: { gap: 12, marginTop: 24 },
-  count: { fontSize: 14, color: COLORS.textSecondary },
-  card: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.borderDark,
+  count: { fontSize: 14, color: colors.textSecondary },
+  card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderDark,
     borderRadius: 14, padding: 16 },
-  cardTitle: { fontSize: 19, fontWeight: '600', color: COLORS.textPrimary },
-  phone: { fontSize: 17, color: COLORS.textPrimary, marginTop: 8 },
-  relationship: { fontSize: 14, color: COLORS.textSecondary, marginTop: 6 },
+  cardTitle: { fontSize: 19, fontWeight: '600', color: colors.textPrimary },
+  phone: { fontSize: 17, color: colors.textPrimary, marginTop: 8 },
+  relationship: { fontSize: 14, color: colors.textSecondary, marginTop: 6 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 18 },
-  notice: { color: COLORS.safeGreen, fontSize: 15, marginTop: 16 },
-  overlay: { flex: 1, backgroundColor: COLORS.overlay, padding: 20, justifyContent: 'center' },
-  dialog: { backgroundColor: COLORS.card, borderRadius: 16, maxHeight: '90%', width: '100%',
+  notice: { color: colors.safeGreen, fontSize: 15, marginTop: 16 },
+  overlay: { flex: 1, backgroundColor: colors.overlay, padding: 20, justifyContent: 'center' },
+  dialog: { backgroundColor: colors.card, borderRadius: 16, maxHeight: '90%', width: '100%',
     maxWidth: 520, alignSelf: 'center' },
   dialogContent: { padding: 24 },
-  dialogTitle: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 16 },
+  dialogTitle: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, marginBottom: 16 },
   field: { marginBottom: 14 },
-  label: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '600', marginBottom: 8 },
-  input: { borderWidth: 1, borderColor: COLORS.borderDark, borderRadius: 8, paddingHorizontal: 12,
-    paddingVertical: 12, minHeight: 48, fontSize: 16, color: COLORS.textPrimary },
-  invalidInput: { borderColor: COLORS.dangerRed },
-  errorText: { color: COLORS.dangerRed, fontSize: 14, lineHeight: 21, marginTop: 6 },
-  hint: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 12, flexShrink: 1 },
+  label: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: colors.borderDark, borderRadius: 8, paddingHorizontal: 12,
+    paddingVertical: 12, minHeight: 48, fontSize: 16, color: colors.textPrimary,
+    backgroundColor: colors.surface },
+  invalidInput: { borderColor: colors.dangerRed },
+  errorText: { color: colors.dangerRed, fontSize: 14, lineHeight: 21, marginTop: 6 },
+  hint: { color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginBottom: 12, flexShrink: 1 },
   saving: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
 });

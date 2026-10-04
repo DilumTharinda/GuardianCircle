@@ -18,12 +18,14 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { SELECTABLE_ROLES } from '../../constants/roles';
 
 export default function EditProfileScreen() {
   const { userProfile, updateUserProfile, deleteUserAccount } = useAuth();
+  const { colors } = useTheme();
   const navigation = useNavigation();
 
   const [name, setName] = useState(userProfile?.displayName || '');
@@ -111,6 +113,8 @@ export default function EditProfileScreen() {
     }
   }
 
+  const styles = getStyles(colors);
+
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
@@ -123,7 +127,7 @@ export default function EditProfileScreen() {
               <Image source={{ uri: photoURL }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <Ionicons name="camera" size={32} color={COLORS.darkGreenMid} />
+                <Ionicons name="camera" size={32} color={colors.darkGreenMid} />
               </View>
             )}
             <View style={styles.editIconBadge}>
@@ -138,7 +142,7 @@ export default function EditProfileScreen() {
               <>
                 <Text style={styles.avatarActionDivider}>•</Text>
                 <TouchableOpacity onPress={() => setPhotoURL(null)} disabled={loading}>
-                  <Text style={[styles.avatarActionText, { color: COLORS.dangerRed }]}>Remove</Text>
+                  <Text style={[styles.avatarActionText, { color: colors.dangerRed }]}>Remove</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -156,7 +160,7 @@ export default function EditProfileScreen() {
           <TextInput
             style={styles.input}
             placeholder="Your Name"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={name}
             onChangeText={setName}
             editable={!loading}
@@ -193,7 +197,7 @@ export default function EditProfileScreen() {
             <TextInput
               style={styles.input}
               placeholder="Your Password"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -223,7 +227,7 @@ export default function EditProfileScreen() {
           onPress={() => setDeleteModalVisible(true)}
           disabled={loading}
         >
-          <Ionicons name="trash-outline" size={18} color={COLORS.dangerRed} />
+          <Ionicons name="trash-outline" size={18} color={colors.dangerRed} />
           <Text style={styles.deleteBtnText}>Delete Account</Text>
         </TouchableOpacity>
 
@@ -250,7 +254,7 @@ export default function EditProfileScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="Your Password"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
               secureTextEntry
               value={deletePassword}
               onChangeText={setDeletePassword}
@@ -302,10 +306,10 @@ export default function EditProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     padding: SPACING.xl,
@@ -314,7 +318,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.md,
   },
   avatarSection: {
@@ -334,9 +338,9 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -345,14 +349,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     width: 28,
     height: 28,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: COLORS.background,
+    borderColor: colors.background,
   },
   avatarActionRow: {
     flexDirection: 'row',
@@ -362,19 +366,19 @@ const styles = StyleSheet.create({
   avatarActionText: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.bold,
-    color: COLORS.primary,
+    color: colors.primary,
   },
   avatarActionDivider: {
-    color: COLORS.textMuted,
+    color: colors.textMuted,
   },
   errorBox: {
-    backgroundColor: COLORS.dangerRed + '20',
+    backgroundColor: colors.dangerRed + '20',
     padding: SPACING.md,
     borderRadius: RADIUS.md,
     marginBottom: SPACING.md,
   },
   errorText: {
-    color: COLORS.dangerRed,
+    color: colors.dangerRed,
     fontSize: FONTS.sm,
     fontWeight: FONTS.medium,
   },
@@ -384,49 +388,49 @@ const styles = StyleSheet.create({
   label: {
     fontSize: FONTS.base,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   helperText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginBottom: SPACING.sm,
   },
   input: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     height: 50,
     fontSize: FONTS.base,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   roleContainer: {
     gap: SPACING.sm,
   },
   roleCard: {
     padding: SPACING.md,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     borderRadius: RADIUS.md,
   },
   roleCardSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '15',
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '15',
   },
   roleText: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: FONTS.medium,
   },
   roleTextSelected: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: FONTS.bold,
   },
   saveBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     height: 50,
     borderRadius: RADIUS.lg,
     alignItems: 'center',
@@ -440,13 +444,13 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.border,
+    backgroundColor: colors.border,
     marginVertical: SPACING.xl,
   },
   dangerTitle: {
     fontSize: FONTS.md,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.md,
   },
   deleteBtn: {
@@ -454,19 +458,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    backgroundColor: COLORS.dangerRed + '10',
+    backgroundColor: colors.dangerRed + '10',
     borderWidth: 1,
-    borderColor: COLORS.dangerRed + '40',
+    borderColor: colors.dangerRed + '40',
     height: 50,
     borderRadius: RADIUS.lg,
   },
   deleteBtnText: {
-    color: COLORS.dangerRed,
+    color: colors.dangerRed,
     fontSize: FONTS.base,
     fontWeight: FONTS.bold,
   },
   
-  // Modal Styles (copied from ProfileScreen)
+  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -475,7 +479,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
   },
   modalCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     width: '100%',
@@ -484,29 +488,29 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: FONTS.lg,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.sm,
   },
   modalSubText: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginBottom: SPACING.lg,
     lineHeight: 20,
   },
   modalError: {
     fontSize: FONTS.sm,
-    color: COLORS.dangerRed,
+    color: colors.dangerRed,
     marginBottom: SPACING.sm,
   },
   modalInput: {
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     height: 48,
     fontSize: FONTS.base,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xl,
   },
   modalButtonRow: {
@@ -521,17 +525,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalButtonCancel: {
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   modalButtonCancelText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   modalButtonDelete: {
-    backgroundColor: COLORS.dangerRed,
+    backgroundColor: colors.dangerRed,
   },
   modalButtonDeleteText: {
     fontSize: FONTS.base,

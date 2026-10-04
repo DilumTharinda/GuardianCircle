@@ -9,7 +9,7 @@ import { createJourneyController, initialJourneyState } from '../services/journe
 
 export function useJourney(uid, focused) {
   const [state, setState] = useState(initialJourneyState);
-  const [clock, setClock] = useState(Date.now);
+  const [clock, setClock] = useState(Date.now());
   const controller = useRef(null);
   const isForeground = useRef(AppState.currentState === 'active');
   const isFocused = useRef(focused);
