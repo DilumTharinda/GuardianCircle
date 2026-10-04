@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { ROUTES } from '../../constants/routes';
 import {
   getChildren,
@@ -31,6 +32,7 @@ import PetItemSection from '../../components/parentchild/PetItemSection';
 
 export default function ParentDashboardScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
 
   const [childrenList, setChildrenList] = useState([]);
   const [petsItemsList, setPetsItemsList] = useState([]);
@@ -130,6 +132,7 @@ export default function ParentDashboardScreen() {
   }
 
   const activeSOSChild = childrenList.find((c) => c.sosActive);
+  const styles = getStyles(colors);
 
   return (
     <View style={styles.screenWrapper}>
@@ -140,7 +143,7 @@ export default function ParentDashboardScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[COLORS.primary]}
+            colors={[colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -164,7 +167,7 @@ export default function ParentDashboardScreen() {
 
           {/* Offline / Mock Mode Safety Badge */}
           <View style={styles.mockModeBadge}>
-            <Ionicons name={USE_MOCK_DATA ? "flask" : "cloud-done"} size={14} color={COLORS.safeGreen} style={{ marginRight: 4 }} />
+            <Ionicons name={USE_MOCK_DATA ? "flask" : "cloud-done"} size={14} color={colors.safeGreen} style={{ marginRight: 4 }} />
             <Text style={styles.mockModeText}>
               {USE_MOCK_DATA ? 'Zero-Quota Offline Mode Active' : 'Live Firebase Connection Active'}
             </Text>
@@ -190,7 +193,7 @@ export default function ParentDashboardScreen() {
             onPress={() => navigation.navigate(ROUTES.CHILD_LOCATION)}
             activeOpacity={0.7}
           >
-            <Ionicons name="map-outline" size={28} color={COLORS.darkGreenMid} style={{ marginBottom: 6 }} />
+            <Ionicons name="map-outline" size={28} color={colors.darkGreenMid} style={{ marginBottom: 6 }} />
             <Text style={styles.quickLabel}>Live Map</Text>
             <Text style={styles.quickSub}>GPS tracking</Text>
           </TouchableOpacity>
@@ -200,7 +203,7 @@ export default function ParentDashboardScreen() {
             onPress={() => navigation.navigate(ROUTES.SAFE_ZONES)}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="shield-home-outline" size={28} color={COLORS.darkGreenMid} style={{ marginBottom: 6 }} />
+            <MaterialCommunityIcons name="shield-home-outline" size={28} color={colors.darkGreenMid} style={{ marginBottom: 6 }} />
             <Text style={styles.quickLabel}>Safe Zones</Text>
             <Text style={styles.quickSub}>Geofence rules</Text>
           </TouchableOpacity>
@@ -210,7 +213,7 @@ export default function ParentDashboardScreen() {
             onPress={() => navigation.navigate(ROUTES.CHILD_HISTORY)}
             activeOpacity={0.7}
           >
-            <Ionicons name="time-outline" size={28} color={COLORS.darkGreenMid} style={{ marginBottom: 6 }} />
+            <Ionicons name="time-outline" size={28} color={colors.darkGreenMid} style={{ marginBottom: 6 }} />
             <Text style={styles.quickLabel}>History</Text>
             <Text style={styles.quickSub}>Daily timeline</Text>
           </TouchableOpacity>
@@ -226,12 +229,12 @@ export default function ParentDashboardScreen() {
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Syncing linked children...</Text>
           </View>
         ) : childrenList.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="people-outline" size={48} color={COLORS.textMuted} style={{ marginBottom: 12 }} />
+            <Ionicons name="people-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
             <Text style={styles.emptyTitle}>No Children Linked Yet</Text>
             <Text style={styles.emptySub}>
               Link your child's phone with a 6-digit code or create a managed profile to monitor their location.
@@ -298,10 +301,10 @@ export default function ParentDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   screenWrapper: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
@@ -311,13 +314,13 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
   },
   headerHero: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.lg,
     padding: SPACING.lg,
     marginBottom: SPACING.lg,
     ...SHADOWS.small,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   headerTop: {
     flexDirection: 'row',
@@ -326,14 +329,14 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     ...TYPOGRAPHY.h2,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   heroSubtitle: {
     ...TYPOGRAPHY.body2,
     marginTop: 2,
   },
   addChildHeaderBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: RADIUS.md,
@@ -347,7 +350,7 @@ const styles = StyleSheet.create({
   mockModeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.safeGreenLight,
+    backgroundColor: colors.safeGreenLight,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: RADIUS.sm,
@@ -356,7 +359,7 @@ const styles = StyleSheet.create({
   },
   mockModeText: {
     fontSize: 11,
-    color: COLORS.safeGreen,
+    color: colors.safeGreen,
     fontWeight: '700',
   },
   sectionHeaderRow: {
@@ -369,10 +372,10 @@ const styles = StyleSheet.create({
   sectionHeader: {
     ...TYPOGRAPHY.h3,
     fontSize: 16,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   linkText: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '700',
     fontSize: 13,
   },
@@ -384,13 +387,13 @@ const styles = StyleSheet.create({
   },
   quickCard: {
     flex: 1,
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     alignItems: 'center',
     ...SHADOWS.small,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   quickEmoji: {
     fontSize: 24,
@@ -399,11 +402,11 @@ const styles = StyleSheet.create({
   quickLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   quickSub: {
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   loadingBox: {
@@ -412,17 +415,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   loadingText: {
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontSize: 13,
   },
   emptyCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.lg,
     padding: SPACING.xl,
     alignItems: 'center',
     ...SHADOWS.small,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   emptyEmoji: {
     fontSize: 40,
@@ -434,13 +437,13 @@ const styles = StyleSheet.create({
   },
   emptySub: {
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: SPACING.lg,
   },
   emptyBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: RADIUS.md,

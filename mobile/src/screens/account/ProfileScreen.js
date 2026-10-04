@@ -24,8 +24,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import ThemeToggle from '../../components/ThemeToggle';
 
 function formatRole(role) {
@@ -35,6 +36,7 @@ function formatRole(role) {
 
 export default function ProfileScreen() {
   const { userProfile, logout } = useAuth();
+  const { colors } = useTheme();
   const navigation = useNavigation();
 
   // Animations
@@ -83,9 +85,11 @@ export default function ProfileScreen() {
     ? userProfile.displayName[0].toUpperCase()
     : 'U';
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
 
       <ScrollView
         style={styles.scroll}
@@ -95,7 +99,7 @@ export default function ProfileScreen() {
         {/* ── Dark green gradient header ── */}
         <Animated.View style={{ opacity: headerAnim }}>
           <LinearGradient
-            colors={[COLORS.darkGreen, COLORS.darkGreenMid]}
+            colors={[colors.darkGreen, colors.darkGreenMid]}
             style={styles.headerGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -147,19 +151,22 @@ export default function ProfileScreen() {
           ]}
         >
           <StatBlock
-            icon={<MaterialCommunityIcons name="star-outline" size={22} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<MaterialCommunityIcons name="star-outline" size={22} color={colors.darkGreenMid} />}
             value={userProfile?.karma || 0}
             label="Karma"
           />
           <View style={styles.statDivider} />
           <StatBlock
-            icon={<Ionicons name="people-outline" size={22} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="people-outline" size={22} color={colors.darkGreenMid} />}
             value={userProfile?.trustedCount || 0}
             label="Circle"
           />
           <View style={styles.statDivider} />
           <StatBlock
-            icon={<Ionicons name="walk-outline" size={22} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="walk-outline" size={22} color={colors.darkGreenMid} />}
             value={userProfile?.journeys || 0}
             label="Journeys"
           />
@@ -175,17 +182,20 @@ export default function ProfileScreen() {
         >
           <Text style={styles.sectionHeader}>Account</Text>
           <InfoRow
-            icon={<Ionicons name="person-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="person-outline" size={18} color={colors.darkGreenMid} />}
             label="Display Name"
             value={userProfile?.displayName || '—'}
           />
           <InfoRow
-            icon={<Ionicons name="mail-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="mail-outline" size={18} color={colors.darkGreenMid} />}
             label="Email"
             value={userProfile?.email || '—'}
           />
           <InfoRow
-            icon={<MaterialCommunityIcons name="shield-account-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<MaterialCommunityIcons name="shield-account-outline" size={18} color={colors.darkGreenMid} />}
             label="Role"
             value={formatRole(userProfile?.role)}
             isLast
@@ -202,22 +212,26 @@ export default function ProfileScreen() {
         >
           <Text style={styles.sectionHeader}>Settings</Text>
           <MenuRow
-            icon={<Ionicons name="create-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="create-outline" size={18} color={colors.darkGreenMid} />}
             label="Edit Profile"
             onPress={() => navigation.navigate('EditProfile')}
           />
           <MenuRow
-            icon={<Ionicons name="notifications-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="notifications-outline" size={18} color={colors.darkGreenMid} />}
             label="Notifications"
             onPress={() => {}}
           />
           <MenuRow
-            icon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="lock-closed-outline" size={18} color={colors.darkGreenMid} />}
             label="Privacy & Safety"
             onPress={() => {}}
           />
           <MenuRow
-            icon={<Ionicons name="help-circle-outline" size={18} color={COLORS.darkGreenMid} />}
+            colors={colors}
+            icon={<Ionicons name="help-circle-outline" size={18} color={colors.darkGreenMid} />}
             label="Help & Support"
             onPress={() => {}}
             isLast
@@ -231,7 +245,7 @@ export default function ProfileScreen() {
             onPress={handleLogout}
             activeOpacity={0.75}
           >
-            <Ionicons name="log-out-outline" size={20} color={COLORS.dangerRed} />
+            <Ionicons name="log-out-outline" size={20} color={colors.dangerRed} />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -244,7 +258,8 @@ export default function ProfileScreen() {
 
 // ── Sub-components ───────────────────────────────────────────────
 
-function StatBlock({ icon, value, label }) {
+function StatBlock({ colors, icon, value, label }) {
+  const styles = getStyles(colors);
   return (
     <View style={styles.statBlock}>
       {icon}
@@ -254,7 +269,8 @@ function StatBlock({ icon, value, label }) {
   );
 }
 
-function InfoRow({ icon, label, value, isLast }) {
+function InfoRow({ colors, icon, label, value, isLast }) {
+  const styles = getStyles(colors);
   return (
     <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
       <View style={styles.infoRowIcon}>{icon}</View>
@@ -264,7 +280,8 @@ function InfoRow({ icon, label, value, isLast }) {
   );
 }
 
-function MenuRow({ icon, label, onPress, isLast }) {
+function MenuRow({ colors, icon, label, onPress, isLast }) {
+  const styles = getStyles(colors);
   return (
     <TouchableOpacity
       style={[styles.menuRow, isLast && styles.menuRowLast]}
@@ -273,13 +290,13 @@ function MenuRow({ icon, label, onPress, isLast }) {
     >
       <View style={styles.infoRowIcon}>{icon}</View>
       <Text style={styles.menuLabel}>{label}</Text>
-      <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (colors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 40 },
 
@@ -315,9 +332,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: COLORS.accentGreen,
+    backgroundColor: colors.accentGreen,
     borderWidth: 2,
-    borderColor: COLORS.darkGreenMid,
+    borderColor: colors.darkGreenMid,
   },
   headerName: {
     fontSize: FONTS.xl,
@@ -348,7 +365,7 @@ const styles = StyleSheet.create({
   // Stats
   statsCard: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: RADIUS.lg,
     marginHorizontal: SPACING.xl,
     marginTop: -18,
@@ -363,22 +380,22 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 40,
-    backgroundColor: COLORS.border,
+    backgroundColor: colors.border,
   },
   statValue: {
     fontSize: FONTS.lg,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   statLabel: {
     fontSize: FONTS.xs,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: FONTS.medium,
   },
 
   // Section
   section: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: RADIUS.lg,
     marginHorizontal: SPACING.xl,
     marginTop: SPACING.lg,
@@ -387,7 +404,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: FONTS.xs,
     fontWeight: FONTS.bold,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     paddingHorizontal: SPACING.lg,
@@ -402,7 +419,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
     gap: SPACING.sm,
   },
   infoRowLast: { borderBottomWidth: 0 },
@@ -413,12 +430,12 @@ const styles = StyleSheet.create({
   infoLabel: {
     flex: 1,
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   infoValue: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     maxWidth: '55%',
     textAlign: 'right',
   },
@@ -430,14 +447,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
     gap: SPACING.sm,
   },
   menuRowLast: { borderBottomWidth: 0 },
   menuLabel: {
     flex: 1,
     fontSize: FONTS.base,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     fontWeight: FONTS.medium,
   },
 
@@ -449,7 +466,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     marginHorizontal: SPACING.xl,
     marginTop: SPACING.lg,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: RADIUS.lg,
     paddingVertical: SPACING.lg,
     borderWidth: 1.5,
@@ -458,6 +475,6 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.bold,
-    color: COLORS.dangerRed,
+    color: colors.dangerRed,
   },
 });

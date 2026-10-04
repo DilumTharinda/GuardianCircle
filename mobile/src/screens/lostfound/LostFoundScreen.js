@@ -11,10 +11,12 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { ROUTES } from '../../constants/routes';
 
 export default function LostFoundScreen({ navigation }) {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [matches, setMatches] = useState([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
 
@@ -61,6 +63,8 @@ export default function LostFoundScreen({ navigation }) {
     }, [user])
   );
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Lost & Found</Text>
@@ -90,7 +94,7 @@ export default function LostFoundScreen({ navigation }) {
       <Text style={styles.sectionTitle}>My Matches</Text>
 
       {loadingMatches ? (
-        <ActivityIndicator color="#E53935" style={{ marginTop: 10 }} />
+        <ActivityIndicator color={colors.primary} style={{ marginTop: 10 }} />
       ) : matches.length === 0 ? (
         <View style={styles.placeholder}>
           <Text style={styles.placeholderText}>No matches yet</Text>
@@ -113,27 +117,27 @@ export default function LostFoundScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     padding: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#E53935',
+    color: colors.primary,
     marginBottom: 4,
     textAlign: 'center',
   },
   sub: {
     fontSize: 16,
-    color: '#666',
+    color: colors.textSecondary,
     marginBottom: 20,
     textAlign: 'center',
   },
   reportButton: {
-    backgroundColor: '#E53935',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -141,7 +145,7 @@ const styles = StyleSheet.create({
   },
   reportButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   foundButton: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: colors.safeGreen,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -149,7 +153,7 @@ const styles = StyleSheet.create({
   },
   foundButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   communityButton: {
-    backgroundColor: '#1565C0',
+    backgroundColor: colors.infoBlue,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -159,32 +163,32 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: colors.textPrimary,
     marginBottom: 10,
   },
   placeholder: {
     width: '100%',
     height: 100,
     borderWidth: 2,
-    borderColor: '#ddd',
+    borderColor: colors.border,
     borderStyle: 'dashed',
     borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.surface,
   },
   placeholderText: {
     fontSize: 14,
-    color: '#aaa',
+    color: colors.textMuted,
   },
   matchItem: {
     padding: 14,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.border,
     borderRadius: 10,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.surface,
     marginBottom: 10,
   },
-  matchStatus: { fontWeight: '600', color: '#333', marginBottom: 4 },
-  matchOpenChat: { color: '#2E7D32', fontSize: 13 },
+  matchStatus: { fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
+  matchOpenChat: { color: colors.safeGreen, fontSize: 13 },
 });
