@@ -24,14 +24,15 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { ROUTES } from '../../constants/routes';
 
 const LOW_CONFIDENCE_THRESHOLD = 1;
 
-export default function CommunityFeedScreen() {
+export default function CommunityFeedScreen({ navigation }) {
   const { user } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [confirmingId, setConfirmingId] = useState(null); // tracks which report is mid-submit
+  const [confirmingId, setConfirmingId] = useState(null);
 
   async function fetchReports() {
     setLoading(true);
@@ -73,14 +74,11 @@ export default function CommunityFeedScreen() {
     }, [])
   );
 
-  // Checks whether the current user has already confirmed this report,
-  // by looking at the confirmedBy list we store on each report doc.
   function hasAlreadyConfirmed(report) {
     return Array.isArray(report.confirmedBy) && report.confirmedBy.includes(user.uid);
   }
 
   async function handleConfirm(report) {
-    // Don't let a user own report or confirm the same report twice.
     if (report.reportedBy === user.uid) {
       Alert.alert('Not allowed', 'You cannot confirm your own report.');
       return;
@@ -94,16 +92,11 @@ export default function CommunityFeedScreen() {
     try {
       const reportRef = doc(db, 'reports', report.id);
 
-      // increment() and arrayUnion() are special Firestore operations
-      // that update safely even if two people confirm at the exact
-      // same moment (no "lost update" race condition).
       await updateDoc(reportRef, {
         confidenceScore: increment(1),
         confirmedBy: arrayUnion(user.uid),
       });
 
-      // Update the local list immediately so the UI feels instant,
-      // instead of waiting for a fresh fetch from Firestore.
       setReports((prevReports) =>
         prevReports.map((r) =>
           r.id === report.id
@@ -137,7 +130,18 @@ export default function CommunityFeedScreen() {
           const isOwnReport = report.reportedBy === user.uid;
 
           return (
-            <View key={report.id} style={styles.reportCard}>
+            // Tapping anywhere on the card (except the Confirm button
+            // itself) opens the full status-tracking detail screen.
+            <TouchableOpacity
+              key={report.id}
+              style={styles.reportCard}
+              onPress={() =>
+                navigation.navigate(ROUTES.LOST_FOUND_DETAIL, {
+                  reportId: report.id,
+                })
+              }
+              activeOpacity={0.8}
+            >
               {report.photoUrl && (
                 <Image source={{ uri: report.photoUrl }} style={styles.reportPhoto} />
               )}
@@ -178,7 +182,7 @@ export default function CommunityFeedScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           );
         })
       )}
