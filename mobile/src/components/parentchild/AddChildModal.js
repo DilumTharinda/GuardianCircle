@@ -12,13 +12,16 @@ import {
   Platform,
 } from 'react-native';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY, SHADOWS } from '../../constants/theme';
-import { linkChildByCode, createManagedChildProfile } from '../../services/parentChildService';
+import { searchChildByEmail, sendLinkRequest, createManagedChildProfile } from '../../services/parentChildService';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AddChildModal({ visible, onClose, onSuccess }) {
+  const { userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('link_code'); // 'link_code' | 'managed_profile'
 
   // Link Code State
-  const [linkCode, setLinkCode] = useState('');
+  const [emailSearch, setEmailSearch] = useState('');
+  const [foundChild, setFoundChild] = useState(null);
 
   // Managed Profile State
   const [childName, setChildName] = useState('');
@@ -30,20 +33,35 @@ export default function AddChildModal({ visible, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  async function handleLinkWithCode() {
-    if (!linkCode.trim()) {
-      setErrorMsg('Please enter the 6-digit link code shown on your child’s phone.');
+  async function handleSearch() {
+    if (!emailSearch.trim()) {
+      setErrorMsg('Please enter the child’s email address.');
       return;
     }
     setErrorMsg('');
     setLoading(true);
+    setFoundChild(null);
     try {
-      const linked = await linkChildByCode('parent_user_default', linkCode.trim());
-      setLinkCode('');
-      onSuccess(linked);
+      const child = await searchChildByEmail(emailSearch.trim());
+      setFoundChild(child);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to find child account.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSendRequest() {
+    if (!foundChild) return;
+    setLoading(true);
+    try {
+      await sendLinkRequest(userProfile, foundChild);
+      setEmailSearch('');
+      setFoundChild(null);
+      onSuccess(foundChild); // Trigger success callback
       onClose();
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to link child device.');
+      setErrorMsg(err.message || 'Failed to send request.');
     } finally {
       setLoading(false);
     }
@@ -112,7 +130,7 @@ export default function AddChildModal({ visible, onClose, onSuccess }) {
                   activeTab === 'link_code' && styles.tabItemTextActive,
                 ]}
               >
-                🔗 Link Code (Phone)
+                ✉️ Email Invite
               </Text>
             </TouchableOpacity>
 
@@ -143,40 +161,61 @@ export default function AddChildModal({ visible, onClose, onSuccess }) {
 
           <ScrollView style={styles.bodyScroll} showsVerticalScrollIndicator={false}>
             {activeTab === 'link_code' ? (
-              /* TAB 1: LINK BY 6-DIGIT CODE */
+              /* TAB 1: EMAIL INVITATION */
               <View style={styles.tabContent}>
                 <View style={styles.infoBox}>
-                  <Text style={styles.infoBoxTitle}>📱 How linking works:</Text>
+                  <Text style={styles.infoBoxTitle}>✉️ How linking works:</Text>
                   <Text style={styles.infoBoxText}>
-                    1. Open GuardianCircle on your child’s phone.{'\n'}
-                    2. Navigate to Profile → "Generate Link Code".{'\n'}
-                    3. Enter the 6-digit code below to establish permanent tracking.
+                    1. Search for your child's account by their email address.{'\n'}
+                    2. Send them a connection request.{'\n'}
+                    3. They accept it on their home screen to activate tracking.
                   </Text>
                 </View>
 
-                <Text style={styles.inputLabel}>Enter 6-Digit Link Code</Text>
+                <Text style={styles.inputLabel}>Search by Email</Text>
                 <TextInput
-                  style={styles.codeInput}
-                  placeholder="e.g. GC-849201"
+                  style={styles.textInput}
+                  placeholder="e.g. kasun@example.com"
                   placeholderTextColor={COLORS.textMuted}
-                  value={linkCode}
-                  onChangeText={(val) => setLinkCode(val.toUpperCase())}
-                  autoCapitalize="characters"
-                  maxLength={10}
+                  value={emailSearch}
+                  onChangeText={(val) => {
+                    setEmailSearch(val.toLowerCase());
+                    setFoundChild(null);
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
                 />
 
-                <TouchableOpacity
-                  style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-                  onPress={handleLinkWithCode}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.submitBtnText}>Link Child Device</Text>
-                  )}
-                </TouchableOpacity>
+                {!foundChild ? (
+                  <TouchableOpacity
+                    style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+                    onPress={handleSearch}
+                    disabled={loading || !emailSearch.trim()}
+                    activeOpacity={0.8}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={styles.submitBtnText}>Search Account</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.foundCard}>
+                    <Text style={styles.foundText}>Found: {foundChild.displayName || 'Child Account'}</Text>
+                    <TouchableOpacity
+                      style={[styles.submitBtn, { marginTop: SPACING.sm }, loading && styles.submitBtnDisabled]}
+                      onPress={handleSendRequest}
+                      disabled={loading}
+                      activeOpacity={0.8}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#FFF" />
+                      ) : (
+                        <Text style={styles.submitBtnText}>Send Request</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             ) : (
               /* TAB 2: MANAGED CHILD PROFILE */
@@ -453,5 +492,20 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  foundCard: {
+    backgroundColor: COLORS.safeGreenLight,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.sm,
+    borderWidth: 1,
+    borderColor: COLORS.safeGreen,
+  },
+  foundText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.safeGreen,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
   },
 });

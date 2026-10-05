@@ -16,7 +16,7 @@ import {
  * TOGGLE: Set to true to strictly prevent Firebase quota consumption during development and testing.
  * When true, all operations read/write from local AsyncStorage and rich realistic mock data.
  */
-export const USE_MOCK_DATA = true;
+export const USE_MOCK_DATA = false;
 
 const STORAGE_KEYS = {
   CHILDREN: '@guardiancircle_mock_children_v4',
@@ -625,6 +625,93 @@ export async function getChildren(parentUid = 'parent_user_default') {
 export async function getChildById(childId) {
   const children = await getStoredChildren();
   return children.find((c) => c.id === childId) || children[0] || null;
+}
+
+/**
+ * Search for a user by email to link as a child.
+ */
+export async function searchChildByEmail(email) {
+  if (USE_MOCK_DATA) {
+    throw new Error('Search not available in mock mode.');
+  }
+  const q = query(
+    collection(db, 'users'),
+    where('email', '==', email.trim().toLowerCase())
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) {
+    throw new Error('No user found with that email address.');
+  }
+  const userDoc = snap.docs[0];
+  const userData = userDoc.data();
+  if (userData.role !== 'child_dependent') {
+    throw new Error('The requested user is not registered as a Child/Dependent.');
+  }
+  return { id: userDoc.id, ...userData };
+}
+
+/**
+ * Send a link request to a child.
+ */
+export async function sendLinkRequest(parentProfile, childUser) {
+  if (USE_MOCK_DATA) return;
+  const linkId = `${parentProfile.uid}_${childUser.id}`;
+  
+  const linkRequest = {
+    id: linkId,
+    type: 'child',
+    ownerUid: parentProfile.uid,
+    ownerName: parentProfile.displayName || 'Parent',
+    targetUid: childUser.id,
+    targetName: childUser.displayName || 'Child',
+    targetAge: 10,
+    targetPhone: childUser.phone || '',
+    targetPhotoURL: childUser.photoURL || null,
+    avatarEmoji: '🧒',
+    permissions: {
+      viewLocation: true,
+      receiveSOS: true,
+      receiveJourney: true,
+    },
+    linkedAt: serverTimestamp(),
+    status: 'pending', // Pending status
+    batteryLevel: 100,
+    isOnline: false,
+    speed: 'Stationary',
+    sosActive: false,
+    sosTimestamp: null,
+    currentZoneName: '',
+    lastLocation: null,
+    safeZones: [],
+  };
+
+  await setDoc(doc(db, 'linkedEntities', linkId), linkRequest);
+}
+
+/**
+ * Fetch pending link requests for a child.
+ */
+export async function getPendingRequests(childUid) {
+  if (USE_MOCK_DATA) return [];
+  const q = query(
+    collection(db, 'linkedEntities'),
+    where('targetUid', '==', childUid),
+    where('type', '==', 'child'),
+    where('status', '==', 'pending')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Accept a pending link request.
+ */
+export async function acceptLinkRequest(linkId) {
+  if (USE_MOCK_DATA) return;
+  await updateDoc(doc(db, 'linkedEntities', linkId), {
+    status: 'active',
+    linkedAt: serverTimestamp(),
+  });
 }
 
 /**
