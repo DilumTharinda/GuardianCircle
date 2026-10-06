@@ -25,8 +25,13 @@ import {
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
+import { awardKarma } from '../../services/karmaService';
 
 const LOW_CONFIDENCE_THRESHOLD = 1;
+
+// Small karma reward for the report's own author, each time someone
+// else confirms their report is accurate.
+const KARMA_FOR_CONFIRMED_REPORT = 1;
 
 export default function CommunityFeedScreen({ navigation }) {
   const { user } = useAuth();
@@ -97,6 +102,10 @@ export default function CommunityFeedScreen({ navigation }) {
         confirmedBy: arrayUnion(user.uid),
       });
 
+      // Reward the original reporter with a small karma bonus for
+      // having their report confirmed as accurate by the community.
+      await awardKarma(report.reportedBy, KARMA_FOR_CONFIRMED_REPORT);
+
       setReports((prevReports) =>
         prevReports.map((r) =>
           r.id === report.id
@@ -130,8 +139,6 @@ export default function CommunityFeedScreen({ navigation }) {
           const isOwnReport = report.reportedBy === user.uid;
 
           return (
-            // Tapping anywhere on the card (except the Confirm button
-            // itself) opens the full status-tracking detail screen.
             <TouchableOpacity
               key={report.id}
               style={styles.reportCard}
