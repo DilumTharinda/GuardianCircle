@@ -9,15 +9,29 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  collection,
+  query,
+  where,
+  limit,
+  getDocs,
+} from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { awardKarma } from '../../services/karmaService';
 
 const STAGES = [
   { key: 'lost', label: 'Lost / Missing' },
   { key: 'sighted', label: 'Sighted / Matched' },
   { key: 'reunited', label: 'Reunited / Returned' },
 ];
+
+// How many karma points the person who helped gets, when the
+// original owner marks their item as reunited.
+const KARMA_FOR_HELPING = 10;
 
 function getStageIndex(status) {
   const index = STAGES.findIndex((stage) => stage.key === status);
@@ -44,16 +58,33 @@ export default function LostFoundDetailScreen({ route }) {
     return () => unsubscribe();
   }, [reportId]);
 
-  // Lets the person who originally filed this report mark it as
-  // resolved once the item/pet has actually been returned to them.
-  // This is also the moment (used later, in Part 7) that karma
-  // points get awarded to whoever helped.
+  // Finds the person who helped — i.e. whoever filed the found report
+  // that was matched to this lost report — by checking the matches
+  // collection. Only looks at the single most relevant match.
+  async function findHelperUid() {
+    const matchQuery = query(
+      collection(db, 'matches'),
+      where('lostReportId', '==', reportId),
+      limit(1)
+    );
+    const snapshot = await getDocs(matchQuery);
+    if (snapshot.empty) return null;
+
+    return snapshot.docs[0].data().foundReporterId || null;
+  }
+
   async function handleMarkReunited() {
     setUpdating(true);
     try {
       await updateDoc(doc(db, 'reports', reportId), {
         status: 'reunited',
       });
+
+      // Reward whoever helped find this item, if we can identify them.
+      const helperUid = await findHelperUid();
+      if (helperUid) {
+        await awardKarma(helperUid, KARMA_FOR_HELPING);
+      }
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
