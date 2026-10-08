@@ -124,6 +124,7 @@ export function AuthProvider({ children }) {
       uid: 'parent_user_default',
       email: 'lavindi.parent@guardiancircle.test',
       displayName: 'Lavindi Tharunya',
+      emailVerified: true,
     };
     const demoProfile = {
       uid: 'parent_user_default',

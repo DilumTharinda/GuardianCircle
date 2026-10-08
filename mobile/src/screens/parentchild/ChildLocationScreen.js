@@ -11,7 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import {
   getChildren,
   updateChildLocation,
@@ -40,6 +41,7 @@ if (Platform.OS !== 'web') {
 }
 
 export default function ChildLocationScreen() {
+  const { colors } = useTheme();
   const route = useRoute();
   const initialChildId = route.params?.childId;
 
@@ -146,7 +148,7 @@ export default function ChildLocationScreen() {
   if (loading) {
     return (
       <View style={styles.loadingCenter}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Acquiring live satellite GPS...</Text>
       </View>
     );
@@ -171,7 +173,9 @@ export default function ChildLocationScreen() {
   const safeZones = activeChild.safeZones || [];
   const battery = activeChild.batteryLevel ?? 80;
   const batteryColor =
-    battery > 50 ? COLORS.safeGreen : battery > 20 ? COLORS.warnOrange : COLORS.dangerRed;
+    battery > 50 ? colors.safeGreen : battery > 20 ? colors.warnOrange : colors.dangerRed;
+
+  const styles = getStyles(colors);
 
   return (
     <View style={styles.container}>
@@ -253,7 +257,7 @@ export default function ChildLocationScreen() {
           <View style={styles.cardInfoCol}>
             <View style={styles.cardNameRow}>
               <Text style={styles.cardChildName}>{activeChild.targetName}</Text>
-              <View style={[styles.batteryPill, { backgroundColor: COLORS.safeGreenLight }]}>
+              <View style={[styles.batteryPill, { backgroundColor: colors.safeGreenLight }]}>
                 <Text style={[styles.batteryPillText, { color: batteryColor }]}>
                   🔋 {battery}%
                 </Text>
@@ -338,28 +342,28 @@ export default function ChildLocationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   loadingCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     gap: 12,
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   emptyCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   emptyEmoji: {
     fontSize: 48,
@@ -369,10 +373,10 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.h3,
   },
   topSelectorContainer: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: colors.border,
     zIndex: 10,
   },
   selectorScroll: {
@@ -389,7 +393,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   childPillActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     ...SHADOWS.small,
   },
   childPillEmoji: {
@@ -398,7 +402,7 @@ const styles = StyleSheet.create({
   childPillName: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   childPillNameActive: {
     color: '#FFF',
@@ -418,7 +422,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
@@ -426,7 +430,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.medium,
   },
   customPinSOS: {
-    backgroundColor: COLORS.dangerRed,
+    backgroundColor: colors.dangerRed,
     borderColor: '#FFCDD2',
     transform: [{ scale: 1.2 }],
   },
@@ -434,14 +438,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   bottomCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
     padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
     ...SHADOWS.large,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -457,7 +461,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   cardAvatarEmoji: {
     fontSize: 26,
@@ -492,11 +496,11 @@ const styles = StyleSheet.create({
   zoneTagText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: colors.primary,
   },
   speedTagText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   addressBox: {
     backgroundColor: '#F8F9FA',
@@ -504,24 +508,24 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginTop: SPACING.md,
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.infoBlue,
+    borderLeftColor: colors.infoBlue,
   },
   addressLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.infoBlue,
+    color: colors.infoBlue,
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   addressVal: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 18,
   },
   lastPingTime: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
   },
   actionButtonRow: {
@@ -531,7 +535,7 @@ const styles = StyleSheet.create({
   },
   callButton: {
     flex: 1,
-    backgroundColor: COLORS.safeGreen,
+    backgroundColor: colors.safeGreen,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
     alignItems: 'center',
@@ -545,7 +549,7 @@ const styles = StyleSheet.create({
   },
   checkInButton: {
     flex: 1.2,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
     alignItems: 'center',
@@ -568,7 +572,7 @@ const styles = StyleSheet.create({
   },
   simMoveBtnText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 });

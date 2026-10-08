@@ -32,14 +32,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { ROUTES } from '../../constants/routes';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const navigation = useNavigation();
   const { login, loginWithGoogle, resetPassword } = useAuth();
+  const { colors } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -148,14 +150,16 @@ export default function LoginScreen() {
     outputRange: ['0%', '38%'],
   });
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
 
       {/* Animated dark green header */}
       <Animated.View style={[styles.headerWrapper, { height: headerHeightInterpolated }]}>
         <LinearGradient
-          colors={[COLORS.darkGreen, COLORS.darkGreenMid]}
+          colors={[colors.darkGreen, colors.darkGreenMid]}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -226,13 +230,13 @@ export default function LoginScreen() {
                 <Ionicons
                   name="mail-outline"
                   size={18}
-                  color={focusedField === 'email' ? COLORS.darkGreenMid : COLORS.textMuted}
+                  color={focusedField === 'email' ? colors.darkGreenMid : colors.textMuted}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="you@example.com"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   onFocus={() => setFocusedField('email')}
@@ -257,13 +261,13 @@ export default function LoginScreen() {
                 <Ionicons
                   name="lock-closed-outline"
                   size={18}
-                  color={focusedField === 'password' ? COLORS.darkGreenMid : COLORS.textMuted}
+                  color={focusedField === 'password' ? colors.darkGreenMid : colors.textMuted}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your password"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   onFocus={() => setFocusedField('password')}
@@ -276,7 +280,7 @@ export default function LoginScreen() {
                   <Ionicons
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                     size={20}
-                    color={COLORS.textMuted}
+                    color={colors.textMuted}
                   />
                 </TouchableOpacity>
               </View>
@@ -298,7 +302,7 @@ export default function LoginScreen() {
                 disabled={loading}
               >
                 <LinearGradient
-                  colors={[COLORS.darkGreenMid, COLORS.darkGreen]}
+                  colors={[colors.darkGreenMid, colors.darkGreen]}
                   style={styles.loginButtonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -339,8 +343,8 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
 
   // Header
@@ -357,7 +361,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 40,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
   },
@@ -389,7 +393,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
   },
   formCard: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: colors.cardBackground,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
   },
@@ -397,12 +401,12 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: FONTS.xl,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   subText: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginBottom: SPACING.lg,
   },
 
@@ -415,7 +419,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.dangerRed,
+    borderLeftColor: colors.dangerRed,
   },
   errorText: {
     flex: 1,
@@ -429,35 +433,35 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     height: 52,
   },
   inputWrapperFocused: {
-    borderColor: COLORS.darkGreenMid,
-    backgroundColor: COLORS.darkGreenSurface,
+    borderColor: colors.darkGreenMid,
+    backgroundColor: colors.darkGreenSurface,
   },
   inputIcon: { marginRight: SPACING.sm },
   input: {
     flex: 1,
     fontSize: FONTS.base,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     height: '100%',
   },
 
   forgotRow: { alignItems: 'flex-end', marginBottom: SPACING.lg },
   forgotText: {
     fontSize: FONTS.sm,
-    color: COLORS.darkGreenMid,
+    color: colors.darkGreenMid,
     fontWeight: FONTS.semiBold,
   },
 
@@ -483,8 +487,8 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.lg,
     gap: SPACING.sm,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { fontSize: FONTS.sm, color: COLORS.textMuted },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { fontSize: FONTS.sm, color: colors.textMuted },
 
   // Google
   googleButton: {
@@ -494,7 +498,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: RADIUS.md,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     gap: SPACING.sm,
     marginBottom: SPACING.lg,
   },
@@ -506,15 +510,15 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: FONTS.base,
     fontWeight: FONTS.medium,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
 
   // Register link
   registerRow: { flexDirection: 'row', justifyContent: 'center' },
-  registerPrompt: { fontSize: FONTS.sm, color: COLORS.textSecondary },
+  registerPrompt: { fontSize: FONTS.sm, color: colors.textSecondary },
   registerLink: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.bold,
-    color: COLORS.darkGreenMid,
+    color: colors.darkGreenMid,
   },
 });

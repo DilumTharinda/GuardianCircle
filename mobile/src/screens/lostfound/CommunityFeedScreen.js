@@ -26,6 +26,7 @@ import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
 import { awardKarma } from '../../services/karmaService';
+import { useTheme } from '../../context/ThemeContext';
 
 const LOW_CONFIDENCE_THRESHOLD = 1;
 
@@ -35,6 +36,7 @@ const KARMA_FOR_CONFIRMED_REPORT = 1;
 
 export default function CommunityFeedScreen({ navigation }) {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
   const [confirmingId, setConfirmingId] = useState(null);
@@ -124,13 +126,15 @@ export default function CommunityFeedScreen({ navigation }) {
     }
   }
 
+  const styles = getStyles(colors);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Community Reports</Text>
       <Text style={styles.sub}>Help confirm reports you recognize</Text>
 
       {loading ? (
-        <ActivityIndicator color="#E53935" style={{ marginTop: 20 }} />
+        <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
       ) : reports.length === 0 ? (
         <Text style={styles.emptyText}>No reports yet.</Text>
       ) : (
@@ -197,19 +201,19 @@ export default function CommunityFeedScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 4 },
-  sub: { fontSize: 14, color: '#666', marginBottom: 20 },
-  emptyText: { color: '#999', fontStyle: 'italic', marginTop: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', color: colors.textPrimary, marginBottom: 4 },
+  sub: { fontSize: 14, color: colors.textSecondary, marginBottom: 20 },
+  emptyText: { color: colors.textMuted, fontStyle: 'italic', marginTop: 20 },
   reportCard: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: colors.border,
     borderRadius: 12,
     marginBottom: 14,
     overflow: 'hidden',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: colors.surface,
   },
   reportPhoto: { width: '100%', height: 150 },
   reportInfo: { padding: 12 },
@@ -219,7 +223,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  reportType: { fontWeight: 'bold', fontSize: 14, color: '#333' },
+  reportType: { fontWeight: 'bold', fontSize: 14, color: colors.textPrimary },
   lowConfidenceBadge: {
     fontSize: 11,
     color: '#fff',
@@ -229,14 +233,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
   },
-  reportDescription: { fontSize: 14, color: '#444', marginBottom: 6 },
-  confidenceText: { fontSize: 12, color: '#888', marginBottom: 10 },
+  reportDescription: { fontSize: 14, color: colors.textSecondary, marginBottom: 6 },
+  confidenceText: { fontSize: 12, color: colors.textMuted, marginBottom: 10 },
   confirmButton: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: colors.safeGreen,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
   },
-  confirmButtonDisabled: { backgroundColor: '#aaa' },
+  confirmButtonDisabled: { backgroundColor: colors.textMuted },
   confirmButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 });

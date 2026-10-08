@@ -16,11 +16,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS, FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation();
   const { resetPassword } = useAuth();
+  const { colors } = useTheme();
   
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,9 +62,11 @@ export default function ForgotPasswordScreen() {
     }
   }
 
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.darkGreen} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
       
       <KeyboardAvoidingView
         style={styles.flex}
@@ -96,13 +100,13 @@ export default function ForgotPasswordScreen() {
                 <Ionicons
                   name="mail-outline"
                   size={18}
-                  color={focusedField === 'email' ? COLORS.darkGreenMid : COLORS.textMuted}
+                  color={focusedField === 'email' ? colors.darkGreenMid : colors.textMuted}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
                   placeholder="you@example.com"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   onFocus={() => setFocusedField('email')}
@@ -123,7 +127,7 @@ export default function ForgotPasswordScreen() {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[COLORS.darkGreenMid, COLORS.darkGreen]}
+                colors={[colors.darkGreenMid, colors.darkGreen]}
                 style={styles.primaryButtonGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
@@ -137,7 +141,7 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.backLinkRow} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={16} color={COLORS.textSecondary} />
+              <Ionicons name="arrow-back" size={16} color={colors.textSecondary} />
               <Text style={styles.backLinkText}>Back to Login</Text>
             </TouchableOpacity>
           </View>
@@ -147,8 +151,8 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+const getStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
@@ -157,19 +161,19 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
   },
   formCard: {
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: colors.cardBackground,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
   },
   titleText: {
     fontSize: FONTS.xl,
     fontWeight: FONTS.bold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   subText: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginBottom: SPACING.xl,
     lineHeight: 20,
   },
@@ -181,7 +185,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     marginBottom: SPACING.md,
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.dangerRed,
+    borderLeftColor: colors.dangerRed,
   },
   errorText: {
     flex: 1,
@@ -193,28 +197,28 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FONTS.sm,
     fontWeight: FONTS.semiBold,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginBottom: SPACING.xs,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     height: 52,
   },
   inputWrapperFocused: {
-    borderColor: COLORS.darkGreenMid,
-    backgroundColor: COLORS.darkGreenSurface,
+    borderColor: colors.darkGreenMid,
+    backgroundColor: colors.darkGreenSurface,
   },
   inputIcon: { marginRight: SPACING.sm },
   input: {
     flex: 1,
     fontSize: FONTS.base,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     height: '100%',
   },
   primaryButton: { borderRadius: RADIUS.md, overflow: 'hidden', marginBottom: SPACING.lg },
@@ -239,7 +243,7 @@ const styles = StyleSheet.create({
   },
   backLinkText: {
     fontSize: FONTS.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: FONTS.semiBold,
   },
 });
