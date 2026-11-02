@@ -616,3 +616,7 @@ The project must stay within these limits at all times. Do not make unnecessary 
 8. **Never commit `serviceAccountKey.json`** — it is a Firebase admin secret
 9. **Test on a real phone** through Expo Go before opening a Pull Request
 10. **Ask Member 1** before adding a new npm package or changing shared files (firebase.js, AuthContext.js, navigators, constants)
+
+## M5 parent-child tracking
+
+See [the M5 implementation and validation guide](DOC/M5_PARENT_CHILD_TRACKING.md) for the consent-based linking flow, foreground tracking, Firebase rules integration, test results, device acceptance steps and remaining limitations.
