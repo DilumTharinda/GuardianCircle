@@ -16,6 +16,19 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid', 'role']);
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
+    function linkedParent(childUid) {
+      return parent() && get(/databases/$(database)/documents/m5Links/$(request.auth.uid + '_' + childUid)).data.status == 'active';
+    }
+    match /m5Locations/{childUid} {
+      allow get: if (child() && request.auth.uid == childUid) || linkedParent(childUid);
+      allow create, update: if child() && request.auth.uid == childUid
+        && request.resource.data.keys().hasOnly(['latitude','longitude','accuracy','speed','address','updatedAt','sosActive','sosTimestamp','lastCheckIn','checkInNote'])
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /m5Items/{itemId} {
+      allow create: if parent() && request.resource.data.ownerUid == request.auth.uid;
+      allow read, delete: if parent() && resource.data.ownerUid == request.auth.uid;
+    }
     match /m5Links/{linkId} {
       function participant() { return verified() && (resource.data.ownerUid == request.auth.uid || resource.data.targetUid == request.auth.uid); }
       function validRequest() {
@@ -38,6 +51,22 @@ service cloud.firestore {
           && request.resource.data.targetName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
           && request.resource.data.updatedAt == request.time
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','targetName','updatedAt']));
+      allow update: if participant() && resource.data.status == 'active'
+        && request.resource.data.updatedAt == request.time
+        && ((parent() && resource.data.ownerUid == request.auth.uid
+          && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status == 'revoked')
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['safeZones','updatedAt']) && request.resource.data.safeZones is list && request.resource.data.safeZones.size() <= 20)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkInRequested','updatedAt']) && request.resource.data.checkInRequested == true)))
+          || (child() && resource.data.targetUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkInRequested','updatedAt']) && request.resource.data.checkInRequested == false));
+      match /events/{eventId} {
+        function link() { return get(/databases/$(database)/documents/m5Links/$(linkId)).data; }
+        allow read: if verified() && link().status == 'active' && (link().ownerUid == request.auth.uid || link().targetUid == request.auth.uid);
+        allow create: if child() && link().status == 'active' && link().targetUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['title','category','description','createdAt','actorUid'])
+          && request.resource.data.actorUid == request.auth.uid && request.resource.data.createdAt == request.time;
+        allow delete: if parent() && link().status == 'active' && link().ownerUid == request.auth.uid;
+      }
     }
   }
 }
