@@ -1,7 +1,8 @@
 module.exports = ({ config }) => {
   const androidGoogleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
 
-  if (!androidGoogleMapsApiKey) {
+  const localTesting = process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
+  if (!androidGoogleMapsApiKey && !localTesting) {
     throw new Error('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY must be set before loading the Expo configuration.');
   }
 
@@ -9,7 +10,7 @@ module.exports = ({ config }) => {
     ...config,
     plugins: [
       ...(config.plugins ?? []),
-      ['react-native-maps', { androidGoogleMapsApiKey }],
+      ...(androidGoogleMapsApiKey ? [['react-native-maps', { androidGoogleMapsApiKey }]] : []),
     ],
   };
 };

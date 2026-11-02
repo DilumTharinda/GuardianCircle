@@ -10,7 +10,9 @@
     "test": "jest --watchAll=false",
     "test:services": "node --test tests/*.test.cjs",
     "test:m5": "node --test tests/m5*.test.cjs",
-    "test:rules": "node --test tests/emulator/m5Rules.test.cjs"
+    "test:rules": "node --test tests/emulator/m5Rules.test.cjs",
+    "start:local": "node scripts/startM5Local.cjs",
+    "test:m5:local": "node scripts/checkM5Local.cjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",

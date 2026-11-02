@@ -620,3 +620,5 @@ The project must stay within these limits at all times. Do not make unnecessary 
 ## M5 parent-child tracking
 
 See [the M5 implementation and validation guide](DOC/M5_PARENT_CHILD_TRACKING.md) for the consent-based linking flow, foreground tracking, Firebase rules integration, test results, device acceptance steps and remaining limitations.
+
+To try M5 without production credentials, see [local Android and phone testing](DOC/M5_LOCAL_PHONE_TESTING.md), or double-click `mobile/start-local-test.cmd` on the configured Windows development computer.
