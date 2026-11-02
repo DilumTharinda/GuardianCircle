@@ -339,7 +339,7 @@ export default function ParentDashboardScreen() {
         onClose={() => setModalVisible(false)}
         onSuccess={(newChild) => {
           loadData();
-          Alert.alert('✅ Child Added', `${newChild.targetName} is now linked to your GuardianCircle.`);
+          Alert.alert('Request sent', 'Your child must accept before tracking starts.');
         }}
       />
 

@@ -1,0 +1,43 @@
+// M5 reference rules. Merge with the reviewed rules for other modules before deployment.
+// Do not retain broad authenticated-user or wildcard allows over these paths.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function verified() { return request.auth != null && request.auth.token.email_verified == true; }
+    function role(uid) { return get(/databases/$(database)/documents/users/$(uid)).data.role; }
+    function parent() { return verified() && role(request.auth.uid) == 'parent_guardian'; }
+    function child() { return verified() && role(request.auth.uid) == 'child_dependent'; }
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.role in ['primary_user', 'parent_guardian', 'child_dependent', 'pet_owner', 'trusted_contact'];
+      allow update: if request.auth != null && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid', 'role']);
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    match /m5Links/{linkId} {
+      function participant() { return verified() && (resource.data.ownerUid == request.auth.uid || resource.data.targetUid == request.auth.uid); }
+      function validRequest() {
+        let data = request.resource.data;
+        return parent() && data.ownerUid == request.auth.uid && data.targetUid != request.auth.uid
+          && role(data.targetUid) == 'child_dependent'
+          && linkId == data.ownerUid + '_' + data.targetUid
+          && data.keys().hasOnly(['ownerUid','ownerName','targetUid','targetName','type','status','safeZones','createdAt','updatedAt'])
+          && data.type == 'child' && data.status == 'pending' && data.safeZones == []
+          && data.ownerName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+          && data.targetName == 'Child' && data.createdAt == request.time && data.updatedAt == request.time;
+      }
+      allow get: if participant() || (parent() && !exists(/databases/$(database)/documents/m5Links/$(linkId)));
+      allow list: if participant();
+      allow create: if validRequest();
+      allow update: if
+        (participant() && resource.data.status in ['rejected','revoked'] && validRequest())
+        || (child() && resource.data.targetUid == request.auth.uid && resource.data.status == 'pending'
+          && request.resource.data.status in ['active','rejected']
+          && request.resource.data.targetName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','targetName','updatedAt']));
+    }
+  }
+}
