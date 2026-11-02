@@ -18,7 +18,7 @@ function setup(role = 'parent_guardian', uid = 'parent') {
       update: (ref, value) => { writes.push(value); records.set(ref.id, { ...records.get(ref.id), ...value }); } }),
   };
   const module = { exports: {} };
-  const code = babel.transformSync(fs.readFileSync('src/services/parentChildAccounts.js','utf8'), { babelrc: false, configFile: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code;
+  const code = babel.transformSync(fs.readFileSync(require('node:path').resolve(__dirname, '../src/services/parentChildAccounts.js'),'utf8'), { babelrc: false, configFile: false, plugins: [require.resolve('@babel/plugin-transform-modules-commonjs')] }).code;
   vm.runInNewContext(code, { module, exports: module.exports, require: name => {
     if (name === './firebase') return { auth, db: {} };
     if (name === 'firebase/firestore') return firestore;

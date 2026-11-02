@@ -5,7 +5,7 @@ function setup(overrides={}) {
   const location={ Accuracy:{High:4}, requestForegroundPermissionsAsync:async()=>({status:'granted'}), hasServicesEnabledAsync:async()=>true,
     watchPositionAsync:async(_,callback)=>{watches++;next=callback;return {remove:()=>removed++};}, ...overrides };
   const module={exports:{}};
-  const code=babel.transformSync(fs.readFileSync('src/services/childLocationTracking.js','utf8'),{babelrc:false,configFile:false,plugins:['@babel/plugin-transform-modules-commonjs']}).code;
+  const code=babel.transformSync(fs.readFileSync(require('node:path').resolve(__dirname, '../src/services/childLocationTracking.js'),'utf8'),{babelrc:false,configFile:false,plugins:[require.resolve('@babel/plugin-transform-modules-commonjs')]}).code;
   vm.runInNewContext(code,{module,exports:module.exports,require:()=>location});
   return { start:publish=>module.exports.startChildLocationTracking({publish,onStatus:s=>statuses.push(s),onError:e=>errors.push(e.message)}),
     errors,statuses,next:fix=>next(fix),removed:()=>removed,watches:()=>watches };

@@ -10,8 +10,8 @@ function setup() {
     const index = state.length; state.push(initial); return [initial, v => { state[index] = v; }];
   }, useEffect: callback => { effect = callback; }, createElement: (_, props) => { value = props.value; } };
   const module = { exports: {} };
-  const code = babel.transformSync(fs.readFileSync('src/context/AuthContext.js', 'utf8'), {
-    babelrc: false, configFile: false, plugins: ['@babel/plugin-transform-modules-commonjs', '@babel/plugin-transform-react-jsx'],
+  const code = babel.transformSync(fs.readFileSync(require('node:path').resolve(__dirname, '../src/context/AuthContext.js'), 'utf8'), {
+    babelrc: false, configFile: false, plugins: [require.resolve('@babel/plugin-transform-modules-commonjs'), require.resolve('@babel/plugin-transform-react-jsx')],
   }).code;
   vm.runInNewContext(code, { module, exports: module.exports, console, process: { env: {} }, require: name => {
     if (name === 'react') return { ...react, default: react, __esModule: true };
