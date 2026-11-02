@@ -61,98 +61,44 @@ const safeStorage = {
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // Firebase Auth user object or Demo User
+  const [user, setUser] = useState(null); // Firebase Auth user object
   const [userProfile, setUserProfile] = useState(null); // Firestore profile document
   const [loading, setLoading] = useState(true);
   const [userRefreshKey, setUserRefreshKey] = useState(0);
 
-  // Listen to Firebase auth state changes with safety timeout
+  // Never restore synthetic identities or retain a previous account's profile.
   useEffect(() => {
-    let timer = setTimeout(() => {
-      setLoading(false);
-    }, 1200);
-
-    let unsubscribe = () => {};
-    try {
-      unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        clearTimeout(timer);
-        if (firebaseUser) {
-          setUser(firebaseUser);
-          await loadUserProfile(firebaseUser.uid);
-        } else {
-          // Check if we have a demo user cached
-          const savedDemo = await AsyncStorage.getItem('@demo_parent_user');
-          if (savedDemo) {
-            const parsed = JSON.parse(savedDemo);
-            setUser(parsed.user);
-            setUserProfile(parsed.profile);
-          } else {
-            setUser(null);
-            setUserProfile(null);
+    let generation = 0;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const current = ++generation;
+      setLoading(true);
+      setUser(firebaseUser);
+      setUserProfile(null);
+      if (firebaseUser) {
+        try {
+          const snapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (current === generation && snapshot.exists()) {
+            setUserProfile({ ...snapshot.data(), uid: firebaseUser.uid });
           }
+        } catch (error) {
+          console.warn('[AuthContext] Profile unavailable:', error.code);
         }
-        setLoading(false);
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      setLoading(false);
-    }
-
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-    };
+      }
+      if (current === generation) setLoading(false);
+    });
+    return () => { generation += 1; unsubscribe(); };
   }, []);
 
   async function loadUserProfile(uid) {
-    try {
-      const docRef = doc(db, 'users', uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setUserProfile(docSnap.data());
-      }
-    } catch (e) {
-      console.warn('[AuthContext] Load profile fallback:', e);
+    if (auth.currentUser?.uid !== uid) throw new Error('Authentication required.');
+    const snapshot = await getDoc(doc(db, 'users', uid));
+    if (auth.currentUser?.uid === uid) {
+      setUserProfile(snapshot.exists() ? { ...snapshot.data(), uid } : null);
     }
   }
 
-  /**
-   * 1-Click Demo Login as Parent Guardian (for offline testing without Firebase quota)
-   */
-  async function loginAsDemoParent() {
-    const demoUser = {
-      uid: 'parent_user_default',
-      email: 'lavindi.parent@guardiancircle.test',
-      displayName: 'Lavindi Tharunya',
-      emailVerified: true,
-    };
-    const demoProfile = {
-      uid: 'parent_user_default',
-      email: 'lavindi.parent@guardiancircle.test',
-      displayName: 'Lavindi Tharunya',
-      role: ROLES.PARENT_GUARDIAN,
-      photoURL: null,
-      notificationPrefs: {
-        sos: true,
-        journey: true,
-        lostFound: true,
-        geofence: true,
-        reminders: true,
-      },
-      karma: 100,
-    };
-
-    setUser(demoUser);
-    setUserProfile(demoProfile);
-    await AsyncStorage.setItem(
-      '@demo_parent_user',
-      JSON.stringify({ user: demoUser, profile: demoProfile })
-    );
-    return demoUser;
-  }
-
   async function register(email, password, displayName, role) {
-    if (role === ROLES.ADMIN_MODERATOR) {
+    if (!Object.values(ROLES).includes(role) || role === ROLES.ADMIN_MODERATOR) {
       throw new Error('Admin accounts cannot be created through registration.');
     }
 
@@ -179,8 +125,9 @@ export function AuthProvider({ children }) {
 
     try {
       await setDoc(doc(db, 'users', firebaseUser.uid), profileData);
-    } catch (e) {
-      console.warn('[AuthContext] Firestore profile save failed:', e);
+    } catch (error) {
+      await deleteUser(firebaseUser);
+      throw error;
     }
 
     try {
@@ -239,25 +186,8 @@ export function AuthProvider({ children }) {
       throw new Error('Cannot edit the demo user.');
     }
 
-    // Re-authenticate if role changed
-    if (newRole !== userProfile.role) {
-      const isGoogle = firebaseUser.providerData.some(p => p.providerId === 'google.com');
-      if (!isGoogle) {
-        if (!password) {
-          throw new Error('Password is required to change your role.');
-        }
-        try {
-          const credential = EmailAuthProvider.credential(firebaseUser.email, password);
-          await reauthenticateWithCredential(firebaseUser, credential);
-        } catch (e) {
-          if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password') {
-            throw new Error('Incorrect password.');
-          } else if (e.code === 'auth/requires-recent-login') {
-            throw new Error('For security reasons, you must log out and log back in before changing your role.');
-          }
-          throw e;
-        }
-      }
+    if (newRole !== userProfile?.role) {
+      throw new Error('Account roles cannot be changed in the app.');
     }
 
     // Update Firestore data
@@ -409,7 +339,6 @@ export function AuthProvider({ children }) {
     register,
     login,
     loginWithGoogle,
-    loginAsDemoParent,
     logout,
     loadUserProfile,
     resetPassword,

@@ -5,3 +5,7 @@ node_modules/
 .idea/
 .gradle/
 .expo/
+.env
+.env.*
+!.env.example
+*serviceAccount*.json

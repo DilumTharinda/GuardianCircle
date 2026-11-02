@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, Text, Button, ActivityIndicator } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -20,13 +20,23 @@ import EditProfileScreen from '../screens/account/EditProfileScreen';
 const Stack = createStackNavigator();
 
 export default function AppNavigator() {
-  const { user, loading, userRefreshKey } = useAuth();
+  const { user, userProfile, loading, userRefreshKey, loadUserProfile, logout } = useAuth();
   const { colors } = useTheme();
 
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.darkGreenMid} />
+      </View>
+    );
+  }
+
+  if (user && !userProfile) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 16 }}>
+        <Text>Your account profile is unavailable. Check your connection and retry.</Text>
+        <Button title="Retry profile" onPress={() => loadUserProfile(user.uid).catch(() => {})} />
+        <Button title="Sign out" onPress={logout} />
       </View>
     );
   }
