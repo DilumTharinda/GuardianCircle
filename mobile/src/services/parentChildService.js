@@ -140,10 +140,28 @@ export async function broadcastChildLiveLocation(childUid, coords = null, addres
   if (childUid !== child.uid) throw new Error('Only your own device location can be published.');
   const position = coords || (await getCurrentDeviceLocation()).coords;
   if (!validCoordinates(position)) throw new Error('Invalid GPS coordinates.');
+  const [previous, linkSnapshot] = await Promise.all([
+    getDoc(doc(db, 'm5Locations', child.uid)),
+    getDocs(query(collection(db, 'm5Links'), where('targetUid', '==', child.uid))),
+  ]);
   if (!isActive() || auth.currentUser?.uid !== child.uid) return;
-  await setDoc(doc(db, 'm5Locations', child.uid), { latitude: position.latitude, longitude: position.longitude,
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'm5Locations', child.uid), { latitude: position.latitude, longitude: position.longitude,
     accuracy: Number.isFinite(position.accuracy) && position.accuracy >= 0 ? position.accuracy : null,
     speed: Number.isFinite(position.speed) ? position.speed : null, address, updatedAt: serverTimestamp() }, { merge: true });
+  if (previous.exists() && validCoordinates(previous.data())) {
+    for (const link of rows(linkSnapshot).filter(link => link.status === 'active')) {
+      for (const zone of link.safeZones || []) {
+        const wasInside = isInsideZone(previous.data(), zone);
+        const inside = isInsideZone(position, zone);
+        if (wasInside !== inside) {
+          const title = `${inside ? 'Entered' : 'Left'} safe zone: ${zone.name}`;
+          batch.set(doc(collection(db, 'm5Links', link.id, 'events')), { title, category: 'zone', description: title, actorUid: child.uid, createdAt: serverTimestamp() });
+        }
+      }
+    }
+  }
+  await batch.commit();
 }
 
 // Pet/item profiles are account-scoped records; hardware telemetry is unavailable.

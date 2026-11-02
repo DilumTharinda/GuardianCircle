@@ -9,10 +9,11 @@ function setup() {
     getDoc: async ref => { reads.push(ref.id); return snap(ref); },
     getDocs: async ref => ({ docs: [...records.keys()].filter(id => id.startsWith(ref.id + '/') && id.split('/').length === ref.id.split('/').length + 1)
       .filter(id => (ref.filters || []).every(f => records.get(id)[f.field] === f.value)).map(id => snap({ id })) }),
+    writeBatch: () => ({ set: (ref, data) => writes.push({ ref, data }), commit: async () => {} }),
     serverTimestamp: () => 'server-time', updateDoc: async (ref, data) => writes.push({ ref, data }), setDoc: async (ref, data) => writes.push({ ref, data }),
   };
   const module = { exports: {} };
-  const code = babel.transformSync(fs.readFileSync('src/services/parentChildService.js','utf8'), { babelrc:false, configFile:false, plugins:['@babel/plugin-transform-modules-commonjs'] }).code;
+  const code = babel.transformSync(fs.readFileSync(require('node:path').resolve(__dirname, '../src/services/parentChildService.js'),'utf8'), { babelrc:false, configFile:false, plugins:[require.resolve('@babel/plugin-transform-modules-commonjs')] }).code;
   vm.runInNewContext(code, { module, exports: module.exports, console, Date, require: name => {
     if (name === './firebase') return { auth, db: {} };
     if (name === 'firebase/firestore') return firestore;
@@ -59,4 +60,14 @@ test('history filters actual timestamps by day and category', async () => {
   assert.equal((await app.api.getChildHistory('parent_child','today','checkin'))[0].title,'Today');
   assert.equal((await app.api.getChildHistory('parent_child','yesterday'))[0].title,'Yesterday');
   assert.equal((await app.api.getChildHistory('parent_child','today','alert')).length,0);
+});
+
+test('real child fixes log zone transitions for active links only', async () => {
+  const app=setup(); app.asChild();
+  app.records.set('m5Locations/child',{latitude:1,longitude:1});
+  app.records.set('m5Links/parent_child',{ownerUid:'parent',targetUid:'child',status:'active',safeZones:[{name:'Home',latitude:0,longitude:0,radius:250}]});
+  app.records.set('m5Links/other_child',{ownerUid:'other',targetUid:'child',status:'revoked',safeZones:[{name:'Other',latitude:0,longitude:0,radius:250}]});
+  await app.api.broadcastChildLiveLocation('child',{latitude:0,longitude:0});
+  assert.equal(app.writes.length,2); assert.equal(app.writes[1].data.title,'Entered safe zone: Home');
+  assert.equal(app.writes[1].data.actorUid,'child');
 });
