@@ -140,11 +140,12 @@ export async function getCurrentDeviceLocation() {
   const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
   return { success: true, coords: position.coords, address: '' };
 }
-export async function broadcastChildLiveLocation(childUid, coords = null, address = '') {
+export async function broadcastChildLiveLocation(childUid, coords = null, address = '', isActive = () => true) {
   const child = await requireTrackingRole(ROLES.CHILD_DEPENDENT);
   if (childUid !== child.uid) throw new Error('Only your own device location can be published.');
   const position = coords || (await getCurrentDeviceLocation()).coords;
   if (!validCoordinates(position)) throw new Error('Invalid GPS coordinates.');
+  if (!isActive() || auth.currentUser?.uid !== child.uid) return;
   await setDoc(doc(db, 'm5Locations', child.uid), { latitude: position.latitude, longitude: position.longitude,
     accuracy: Number.isFinite(position.accuracy) ? position.accuracy : null,
     speed: Number.isFinite(position.speed) ? position.speed : null, address, updatedAt: serverTimestamp() }, { merge: true });
