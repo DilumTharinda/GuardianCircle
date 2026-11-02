@@ -14,6 +14,12 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:123456789:web:mock123',
 };
 
+// TEMPORARY DEBUG LOG — remove once we've confirmed the correct project is loading
+console.log('[firebase] Config being used:', {
+  projectId: firebaseConfig.projectId,
+  apiKeySource: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ? 'from .env' : 'FALLBACK MOCK VALUE',
+});
+
 // Prevent re-initialization on hot reload
 let app;
 try {

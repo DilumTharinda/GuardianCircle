@@ -10,7 +10,8 @@ import {
   Share,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { getChildren, getChildHistory, clearChildHistory } from '../../services/parentChildService';
 
 const FILTER_TYPES = [
@@ -22,6 +23,7 @@ const FILTER_TYPES = [
 
 export default function ChildHistoryScreen() {
   const route = useRoute();
+  const { colors } = useTheme();
   const initialChildId = route.params?.childId;
 
   const [childrenList, setChildrenList] = useState([]);
@@ -101,11 +103,13 @@ export default function ChildHistoryScreen() {
   if (loading) {
     return (
       <View style={styles.loadingCenter}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Compiling daily journey timeline...</Text>
       </View>
     );
   }
+
+  const styles = getStyles(colors);
 
   return (
     <View style={styles.container}>
@@ -170,7 +174,7 @@ export default function ChildHistoryScreen() {
             <Text style={styles.metricLabel}>Zones Visited</Text>
           </View>
           <View style={styles.metricCard}>
-            <Text style={[styles.metricValue, { color: COLORS.safeGreen }]}>0</Text>
+            <Text style={[styles.metricValue, { color: colors.safeGreen }]}>0</Text>
             <Text style={styles.metricLabel}>Unsafe Flags</Text>
           </View>
         </View>
@@ -221,7 +225,7 @@ export default function ChildHistoryScreen() {
                     <View
                       style={[
                         styles.timelineIconBubble,
-                        { backgroundColor: item.color || COLORS.primary },
+                        { backgroundColor: item.color || colors.primary },
                       ]}
                     >
                       <Text style={styles.timelineIconText}>{item.icon || '📍'}</Text>
@@ -266,10 +270,10 @@ export default function ChildHistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   loadingCenter: {
     flex: 1,
@@ -279,13 +283,13 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   topSelectorContainer: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: colors.border,
   },
   selectorScroll: {
     paddingHorizontal: SPACING.lg,
@@ -301,7 +305,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   childPillActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     ...SHADOWS.small,
   },
   childPillEmoji: {
@@ -310,7 +314,7 @@ const styles = StyleSheet.create({
   childPillName: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   childPillNameActive: {
     color: '#FFF',
@@ -343,10 +347,10 @@ const styles = StyleSheet.create({
   dayTabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   dayTabTextActive: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '700',
   },
   metricsGrid: {
@@ -356,23 +360,23 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     paddingVertical: 12,
     paddingHorizontal: 6,
     borderRadius: RADIUS.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     ...SHADOWS.small,
   },
   metricValue: {
     fontSize: 16,
     fontWeight: '800',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   metricLabel: {
     fontSize: 10,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
     textAlign: 'center',
   },
@@ -383,21 +387,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterChip: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: COLORS.borderDark,
+    borderColor: colors.borderDark,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: RADIUS.full,
   },
   filterChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   filterChipTextActive: {
     color: '#FFF',
@@ -412,12 +416,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   emptyCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.lg,
     padding: SPACING.xl,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
   },
   emptyEmoji: {
     fontSize: 36,
@@ -429,7 +433,7 @@ const styles = StyleSheet.create({
   },
   emptySub: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 4,
   },
@@ -467,11 +471,11 @@ const styles = StyleSheet.create({
   },
   timelineCard: {
     flex: 1,
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     ...SHADOWS.small,
   },
   timelineTopRow: {
@@ -483,36 +487,36 @@ const styles = StyleSheet.create({
   timelineTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   timelineTime: {
     fontSize: 11,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     fontWeight: '600',
   },
   timelineLocation: {
     fontSize: 12,
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '600',
     marginVertical: 2,
   },
   timelineDesc: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 16,
     marginTop: 2,
   },
   exportBtn: {
     backgroundColor: '#FFF',
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
+    borderColor: colors.primary,
     borderRadius: RADIUS.md,
     paddingVertical: 12,
     alignItems: 'center',
     marginBottom: SPACING.xl,
   },
   exportBtnText: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '700',
     fontSize: 13,
   },

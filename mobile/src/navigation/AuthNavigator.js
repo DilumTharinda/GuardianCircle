@@ -2,6 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import LoginScreen from '../screens/account/LoginScreen';
 import RegisterScreen from '../screens/account/RegisterScreen';
+import ForgotPasswordScreen from '../screens/account/ForgotPasswordScreen';
 import { ROUTES } from '../constants/routes';
 
 const Stack = createStackNavigator();
@@ -25,6 +26,11 @@ export default function AuthNavigator() {
         name={ROUTES.REGISTER}
         component={RegisterScreen}
         options={{ title: 'Create Account' }}
+      />
+      <Stack.Screen
+        name={ROUTES.FORGOT_PASSWORD}
+        component={ForgotPasswordScreen}
+        options={{ title: 'Reset Password' }}
       />
     </Stack.Navigator>
   );

@@ -8,6 +8,7 @@ export const ROUTES = {
   SPLASH: 'Splash',
   LOGIN: 'Login',
   REGISTER: 'Register',
+  FORGOT_PASSWORD: 'ForgotPassword',
 
   // Main tab screens
   HOME: 'Home',
@@ -27,10 +28,12 @@ export const ROUTES = {
   UNSAFE_REPORT: 'UnsafeReport',
 
   // Lost & Found sub-screens (Member 4)
+  LOST_FOUND_LIST: 'LostFoundList',
   REPORT_LOST: 'ReportLost',
   REPORT_FOUND: 'ReportFound',
   LOST_FOUND_DETAIL: 'LostFoundDetail',
   MATCH_CHAT: 'MatchChat',
+  COMMUNITY_FEED: 'CommunityFeed',
 
   // Parent-Child sub-screens (Member 5)
   PARENT_DASHBOARD: 'ParentDashboard',

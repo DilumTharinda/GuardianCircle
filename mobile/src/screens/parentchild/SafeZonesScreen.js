@@ -12,7 +12,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { COLORS, SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import {
   getChildren,
   saveSafeZone,
@@ -37,6 +38,7 @@ const RADIUS_OPTIONS = [100, 250, 500, 1000];
 
 export default function SafeZonesScreen() {
   const route = useRoute();
+  const { colors } = useTheme();
   const initialChildId = route.params?.childId;
 
   const [childrenList, setChildrenList] = useState([]);
@@ -188,13 +190,15 @@ export default function SafeZonesScreen() {
   if (loading) {
     return (
       <View style={styles.loadingCenter}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading geofence boundaries...</Text>
       </View>
     );
   }
 
   const safeZones = activeChild?.safeZones || [];
+
+  const styles = getStyles(colors);
 
   return (
     <View style={styles.container}>
@@ -277,7 +281,7 @@ export default function SafeZonesScreen() {
                   <View
                     style={[
                       styles.zoneIconCircle,
-                      { backgroundColor: `${zone.color || COLORS.primary}18` },
+                      { backgroundColor: `${zone.color || colors.primary}18` },
                     ]}
                   >
                     <Text style={styles.zoneIconEmoji}>{zone.icon || '📍'}</Text>
@@ -291,7 +295,7 @@ export default function SafeZonesScreen() {
                           styles.insideBadge,
                           {
                             backgroundColor: isInside
-                              ? COLORS.safeGreenLight
+                              ? colors.safeGreenLight
                               : '#F1F3F5',
                           },
                         ]}
@@ -301,8 +305,8 @@ export default function SafeZonesScreen() {
                             styles.insideBadgeText,
                             {
                               color: isInside
-                                ? COLORS.safeGreen
-                                : COLORS.textMuted,
+                                ? colors.safeGreen
+                                : colors.textMuted,
                             },
                           ]}
                         >
@@ -317,7 +321,7 @@ export default function SafeZonesScreen() {
 
                     {/* Haversine Math readout */}
                     <Text style={styles.distanceMathText}>
-                      📐 Distance from child: <Text style={{ fontWeight: '700', color: COLORS.textPrimary }}>{dist}m</Text>{' '}
+                      📐 Distance from child: <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{dist}m</Text>{' '}
                       ({isInside ? 'within safe boundary' : `${dist - zone.radius}m beyond perimeter`})
                     </Text>
                   </View>
@@ -408,7 +412,7 @@ export default function SafeZonesScreen() {
                 value={zoneName}
                 onChangeText={setZoneName}
                 placeholder="e.g. Karate Dojo"
-                placeholderTextColor={COLORS.textMuted}
+                placeholderTextColor={colors.textMuted}
               />
 
               {/* Radius Options */}
@@ -442,7 +446,7 @@ export default function SafeZonesScreen() {
                 <Switch
                   value={notifyEntry}
                   onValueChange={setNotifyEntry}
-                  trackColor={{ false: '#DDD', true: COLORS.safeGreen }}
+                  trackColor={{ false: '#DDD', true: colors.safeGreen }}
                 />
               </View>
 
@@ -451,7 +455,7 @@ export default function SafeZonesScreen() {
                 <Switch
                   value={notifyExit}
                   onValueChange={setNotifyExit}
-                  trackColor={{ false: '#DDD', true: COLORS.warnOrange }}
+                  trackColor={{ false: '#DDD', true: colors.warnOrange }}
                 />
               </View>
 
@@ -475,10 +479,10 @@ export default function SafeZonesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   loadingCenter: {
     flex: 1,
@@ -488,13 +492,13 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   topSelectorContainer: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: colors.border,
   },
   selectorScroll: {
     paddingHorizontal: SPACING.lg,
@@ -510,7 +514,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   childPillActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     ...SHADOWS.small,
   },
   childPillEmoji: {
@@ -519,7 +523,7 @@ const styles = StyleSheet.create({
   childPillName: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   childPillNameActive: {
     color: '#FFF',
@@ -528,7 +532,7 @@ const styles = StyleSheet.create({
   zoneCountPill: {
     fontSize: 10,
     backgroundColor: 'rgba(0,0,0,0.1)',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: RADIUS.sm,
@@ -541,22 +545,22 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxxl,
   },
   infoBanner: {
-    backgroundColor: COLORS.infoBlueLight,
+    backgroundColor: colors.infoBlueLight,
     borderRadius: RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.lg,
     borderLeftWidth: 3,
-    borderLeftColor: COLORS.infoBlue,
+    borderLeftColor: colors.infoBlue,
   },
   infoBannerTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.infoBlue,
+    color: colors.infoBlue,
     marginBottom: 4,
   },
   infoBannerText: {
     fontSize: 12,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 18,
   },
   listHeaderRow: {
@@ -570,7 +574,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   addBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: RADIUS.md,
@@ -581,12 +585,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.lg,
     padding: SPACING.xl,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     ...SHADOWS.small,
   },
   emptyEmoji: {
@@ -599,13 +603,13 @@ const styles = StyleSheet.create({
   },
   emptySub: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
     marginBottom: SPACING.md,
   },
   emptyActionBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: RADIUS.md,
@@ -616,12 +620,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   zoneCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderRadius: RADIUS.lg,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: colors.border,
     ...SHADOWS.small,
   },
   zoneCardTop: {
@@ -651,7 +655,7 @@ const styles = StyleSheet.create({
   zoneNameText: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   insideBadge: {
     paddingHorizontal: 8,
@@ -664,12 +668,12 @@ const styles = StyleSheet.create({
   },
   zoneRadiusText: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   distanceMathText: {
     fontSize: 11,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   zoneTagsRow: {
@@ -679,7 +683,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopColor: colors.divider,
   },
   tagItem: {
     backgroundColor: '#F1F3F5',
@@ -690,7 +694,7 @@ const styles = StyleSheet.create({
   tagItemText: {
     fontSize: 10,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   deleteZoneBtn: {
     marginLeft: 'auto',
@@ -699,16 +703,16 @@ const styles = StyleSheet.create({
   },
   deleteZoneText: {
     fontSize: 11,
-    color: COLORS.dangerRed,
+    color: colors.dangerRed,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: COLORS.overlay,
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: COLORS.card,
+    backgroundColor: colors.card,
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
     padding: SPACING.lg,
@@ -740,7 +744,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     marginTop: SPACING.md,
     marginBottom: 6,
   },
@@ -759,9 +763,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   presetChipActive: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: colors.primaryLight,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: colors.primary,
   },
   presetEmoji: {
     fontSize: 16,
@@ -769,21 +773,21 @@ const styles = StyleSheet.create({
   presetName: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   presetNameActive: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '700',
   },
   input: {
     backgroundColor: '#F8F9FA',
     borderWidth: 1,
-    borderColor: COLORS.borderDark,
+    borderColor: colors.borderDark,
     borderRadius: RADIUS.md,
     paddingVertical: 10,
     paddingHorizontal: 14,
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   radiusRow: {
     flexDirection: 'row',
@@ -797,12 +801,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radiusChipActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
   },
   radiusChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   radiusChipTextActive: {
     color: '#FFF',
@@ -816,10 +820,10 @@ const styles = StyleSheet.create({
   },
   toggleLabel: {
     fontSize: 13,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
   },
   submitZoneBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     borderRadius: RADIUS.md,
     paddingVertical: 14,
     alignItems: 'center',
