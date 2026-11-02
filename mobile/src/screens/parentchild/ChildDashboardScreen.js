@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View, Button, AppState } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { getPendingRequests, acceptLinkRequest, rejectLinkRequest } from '../../services/parentChildAccounts';
+import { getPendingRequests, acceptLinkRequest, rejectLinkRequest, revokeChildLink } from '../../services/parentChildAccounts';
 
 import { startChildLocationTracking } from '../../services/childLocationTracking';
 import { broadcastChildLiveLocation, getChildLinks, childSendCheckIn, triggerChildSOS } from '../../services/parentChildService';
@@ -37,6 +37,10 @@ export default function ChildDashboardScreen() {
     catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
+  async function revoke(id) {
+    setBusy(true);
+    try { await revokeChildLink(id); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); }
+  }
   async function safetyAction(sos) {
     setBusy(true);
     try { await (sos ? triggerChildSOS(user.uid) : childSendCheckIn(user.uid)); await load(); }
@@ -53,6 +57,8 @@ export default function ChildDashboardScreen() {
     <Button title="Request emergency help from family" disabled={busy} onPress={() => safetyAction(true)} />
     {links.map(link => <View key={link.id}>
       <Text>Linked parent: {link.ownerName}</Text>
+      <Text selectable>Parent account: {link.ownerUid}</Text>
+      <Button title="Unlink this parent" disabled={busy} onPress={() => revoke(link.id)} />
       {link.checkInRequested && <Text>Your parent requested a check-in. Use Send safe check-in to respond.</Text>}
     </View>)}
     {!!error && <Text accessibilityRole="alert">{error}</Text>}

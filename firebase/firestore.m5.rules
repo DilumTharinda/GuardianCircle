@@ -17,13 +17,22 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
     function linkedParent(childUid) {
-      return parent() && get(/databases/$(database)/documents/m5Links/$(request.auth.uid + '_' + childUid)).data.status == 'active';
+      let link = get(/databases/$(database)/documents/m5Links/$(request.auth.uid + '_' + childUid)).data;
+      return parent() && link.ownerUid == request.auth.uid && link.targetUid == childUid && link.status == 'active';
     }
     match /m5Locations/{childUid} {
       allow get: if (child() && request.auth.uid == childUid) || linkedParent(childUid);
       allow create, update: if child() && request.auth.uid == childUid
         && request.resource.data.keys().hasOnly(['latitude','longitude','accuracy','speed','address','updatedAt','sosActive','sosTimestamp','lastCheckIn','checkInNote'])
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && ((request.resource.data.get('latitude', null) == null && request.resource.data.get('longitude', null) == null)
+          || (request.resource.data.latitude is number && request.resource.data.latitude >= -90 && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number && request.resource.data.longitude >= -180 && request.resource.data.longitude <= 180))
+        && (request.resource.data.get('accuracy', null) == null || (request.resource.data.accuracy is number && request.resource.data.accuracy >= 0))
+        && (request.resource.data.get('speed', null) == null || request.resource.data.speed is number)
+        && request.resource.data.get('address', '') is string && request.resource.data.get('address', '').size() <= 500
+        && request.resource.data.get('checkInNote', '') is string && request.resource.data.get('checkInNote', '').size() <= 200
+        && request.resource.data.get('sosActive', false) is bool;
     }
     match /m5Items/{itemId} {
       allow create: if parent() && request.resource.data.ownerUid == request.auth.uid;
@@ -58,7 +67,8 @@ service cloud.firestore {
             || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['safeZones','updatedAt']) && request.resource.data.safeZones is list && request.resource.data.safeZones.size() <= 20)
             || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkInRequested','updatedAt']) && request.resource.data.checkInRequested == true)))
           || (child() && resource.data.targetUid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkInRequested','updatedAt']) && request.resource.data.checkInRequested == false));
+            && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkInRequested','updatedAt']) && request.resource.data.checkInRequested == false)
+              || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']) && request.resource.data.status == 'revoked'))));
       match /events/{eventId} {
         function link() { return get(/databases/$(database)/documents/m5Links/$(linkId)).data; }
         allow read: if verified() && link().status == 'active' && (link().ownerUid == request.auth.uid || link().targetUid == request.auth.uid);

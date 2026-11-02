@@ -147,7 +147,7 @@ export async function broadcastChildLiveLocation(childUid, coords = null, addres
   if (!validCoordinates(position)) throw new Error('Invalid GPS coordinates.');
   if (!isActive() || auth.currentUser?.uid !== child.uid) return;
   await setDoc(doc(db, 'm5Locations', child.uid), { latitude: position.latitude, longitude: position.longitude,
-    accuracy: Number.isFinite(position.accuracy) ? position.accuracy : null,
+    accuracy: Number.isFinite(position.accuracy) && position.accuracy >= 0 ? position.accuracy : null,
     speed: Number.isFinite(position.speed) ? position.speed : null, address, updatedAt: serverTimestamp() }, { merge: true });
 }
 export const updateChildLocation = broadcastChildLiveLocation;

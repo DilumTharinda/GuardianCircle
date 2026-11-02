@@ -53,3 +53,12 @@ async function respondToLink(linkId, status) {
 }
 export const acceptLinkRequest = linkId => respondToLink(linkId, 'active');
 export const rejectLinkRequest = linkId => respondToLink(linkId, 'rejected');
+export async function revokeChildLink(linkId) {
+  const child = await requireTrackingRole(ROLES.CHILD_DEPENDENT);
+  const ref = doc(db, 'm5Links', linkId);
+  await runTransaction(db, async transaction => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists() || snapshot.data().targetUid !== child.uid || snapshot.data().status !== 'active') throw new Error('This active link is unavailable.');
+    transaction.update(ref, { status: 'revoked', updatedAt: serverTimestamp() });
+  });
+}

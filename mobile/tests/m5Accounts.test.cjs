@@ -53,3 +53,11 @@ test('self links, malformed IDs and unverified sessions are rejected', async () 
   app.auth.currentUser.emailVerified = false;
   await assert.rejects(app.api.sendLinkRequest(null, { id: 'child' }), /verified/);
 });
+test('child revocation is limited to its own active links', async () => {
+  const app = setup('child_dependent', 'child');
+  app.records.set('m5Links/parent_child', { targetUid: 'child', status: 'active' });
+  app.records.set('m5Links/parent_other', { targetUid: 'other', status: 'active' });
+  await app.api.revokeChildLink('parent_child'); assert.equal(app.writes[0].status, 'revoked');
+  await assert.rejects(app.api.revokeChildLink('parent_other'), /unavailable/);
+  await assert.rejects(app.api.revokeChildLink('parent_child'), /unavailable/);
+});

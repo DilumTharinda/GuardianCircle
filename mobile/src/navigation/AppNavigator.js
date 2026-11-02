@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import AuthNavigator from './AuthNavigator';
 import MainTabNavigator from './MainTabNavigator';
+import { isParent } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -43,6 +44,7 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator
+      key={user ? `${user.uid}:${userProfile?.role}` : "signed-out"}
       screenOptions={{
         headerStyle: { backgroundColor: colors.darkGreen },
         headerTintColor: '#fff',
@@ -66,6 +68,7 @@ export default function AppNavigator() {
               options={{ headerShown: false }}
             />
 
+          {isParent(userProfile?.role) && <>
           {/* Member 5: Parent-Child Tracking Screens */}
           <Stack.Screen
             name={ROUTES.CHILD_LOCATION}
@@ -91,6 +94,7 @@ export default function AppNavigator() {
               headerShown: true,
             }}
           />
+          </>}
             <Stack.Screen
               name={ROUTES.TRUSTED_CIRCLE}
               component={TrustedCircleScreen}
