@@ -1,5 +1,6 @@
+import { FamilyText as Text, FamilyInput as TextInput, FamilyButton as Button } from './FamilyUI';
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button } from 'react-native';
+import { View } from 'react-native';
 import { getPetsAndItems, addPetOrItem, deletePetOrItem } from '../../services/parentChildService';
 export default function PetItemSection() {
   const [items, setItems] = useState([]); const [name, setName] = useState(''); const [type, setType] = useState('pet'); const [error, setError] = useState('');

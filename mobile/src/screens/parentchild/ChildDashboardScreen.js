@@ -1,5 +1,6 @@
+import { FamilyScreen as ScrollView, FamilyText as Text, FamilyButton as Button } from '../../components/parentchild/FamilyUI';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View, Button, AppState } from 'react-native';
+import { View, AppState } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { getPendingRequests, acceptLinkRequest, rejectLinkRequest, revokeChildLink } from '../../services/parentChildAccounts';

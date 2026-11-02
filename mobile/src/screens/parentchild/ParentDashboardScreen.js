@@ -1,5 +1,6 @@
+import { FamilyScreen as ScrollView, FamilyText as Text, FamilyButton as Button } from '../../components/parentchild/FamilyUI';
 import React, { useCallback, useState } from 'react';
-import { ScrollView, View, Text, Button, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, ActivityIndicator, RefreshControl } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';

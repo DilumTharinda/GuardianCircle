@@ -5,7 +5,6 @@ import { requireTrackingRole } from './parentChildAccounts';
 import { ROLES } from '../constants/roles';
 export { sendLinkRequest, getPendingRequests, acceptLinkRequest } from './parentChildAccounts';
 
-export const USE_MOCK_DATA = false;
 export function validCoordinates(coords) {
   return !!coords && Number.isFinite(coords.latitude) && Math.abs(coords.latitude) <= 90
     && Number.isFinite(coords.longitude) && Math.abs(coords.longitude) <= 180;
@@ -130,10 +129,6 @@ export async function childSendCheckIn(childUid, note = "I'm safe") {
 export async function triggerChildSOS(childUid) {
   await childAction(childUid, { sosActive: true, sosTimestamp: serverTimestamp() }, 'Child requested emergency help', 'alert');
 }
-export async function resolveChildSOS(linkId) {
-  throw new Error('Only the child can confirm they are safe. Ask them to check in.');
-}
-export async function triggerMockSOS() { throw new Error('Simulated tracking is unavailable.'); }
 export async function getCurrentDeviceLocation() {
   const result = await Location.requestForegroundPermissionsAsync();
   if (result.status !== 'granted') throw new Error('Location permission is required to share your position.');
@@ -150,7 +145,6 @@ export async function broadcastChildLiveLocation(childUid, coords = null, addres
     accuracy: Number.isFinite(position.accuracy) && position.accuracy >= 0 ? position.accuracy : null,
     speed: Number.isFinite(position.speed) ? position.speed : null, address, updatedAt: serverTimestamp() }, { merge: true });
 }
-export const updateChildLocation = broadcastChildLiveLocation;
 
 // Pet/item profiles are account-scoped records; hardware telemetry is unavailable.
 export async function getPetsAndItems() {

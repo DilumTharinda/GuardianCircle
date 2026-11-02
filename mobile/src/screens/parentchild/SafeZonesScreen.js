@@ -1,5 +1,6 @@
+import { FamilyScreen as ScrollView, FamilyText as Text, FamilyInput as TextInput, FamilyButton as Button } from '../../components/parentchild/FamilyUI';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, TextInput, Button, View } from 'react-native';
+import { View } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { getChildById, saveSafeZone, deleteSafeZone } from '../../services/parentChildService';
 

@@ -1,5 +1,6 @@
+import { FamilyScreen as ScrollView, FamilyText as Text, FamilyButton as Button } from '../../components/parentchild/FamilyUI';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, Text, View, Button, Platform, Linking } from 'react-native';
+import { View, Platform, Linking } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { getChildById, subscribeToChildLiveLocation, sendCheckInRequest } from '../../services/parentChildService';
 let MapView, Marker;
