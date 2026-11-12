@@ -1,11 +1,10 @@
 import React from 'react';
-import { View, Text, Button, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import AuthNavigator from './AuthNavigator';
 import MainTabNavigator from './MainTabNavigator';
-import { isParent } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
 import ThemeToggle from '../components/ThemeToggle';
 
@@ -21,7 +20,7 @@ import EditProfileScreen from '../screens/account/EditProfileScreen';
 const Stack = createStackNavigator();
 
 export default function AppNavigator() {
-  const { user, userProfile, loading, userRefreshKey, loadUserProfile, logout } = useAuth();
+  const { user, loading, userRefreshKey } = useAuth();
   const { colors } = useTheme();
 
   if (loading) {
@@ -32,19 +31,8 @@ export default function AppNavigator() {
     );
   }
 
-  if (user && !userProfile) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 16 }}>
-        <Text>Your account profile is unavailable. Check your connection and retry.</Text>
-        <Button title="Retry profile" onPress={() => loadUserProfile(user.uid).catch(() => {})} />
-        <Button title="Sign out" onPress={logout} />
-      </View>
-    );
-  }
-
   return (
     <Stack.Navigator
-      key={user ? `${user.uid}:${userProfile?.role}` : "signed-out"}
       screenOptions={{
         headerStyle: { backgroundColor: colors.darkGreen },
         headerTintColor: '#fff',
@@ -68,7 +56,6 @@ export default function AppNavigator() {
               options={{ headerShown: false }}
             />
 
-          {isParent(userProfile?.role) && <>
           {/* Member 5: Parent-Child Tracking Screens */}
           <Stack.Screen
             name={ROUTES.CHILD_LOCATION}
@@ -94,7 +81,6 @@ export default function AppNavigator() {
               headerShown: true,
             }}
           />
-          </>}
             <Stack.Screen
               name={ROUTES.TRUSTED_CIRCLE}
               component={TrustedCircleScreen}

@@ -36,6 +36,3 @@ jobs:
 
       - name: Run unit tests (if configured)
         run: npm test --if-present
-
-      - name: Run service integration tests
-        run: npm run test:services

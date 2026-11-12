@@ -7,8 +7,8 @@ import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { initOfflineDb } from './src/services/offlineStorageService';
-
-
+ 
+ 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -39,12 +39,12 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
+ 
 export default function App() {
   useEffect(() => {
     initOfflineDb();
   }, []);
-
+ 
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
@@ -52,11 +52,6 @@ export default function App() {
           <AuthProvider>
             <NavigationContainer>
               <StatusBar style="auto" />
-              {process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === 'true' && (
-                <View style={{ backgroundColor: '#FFF3CD', padding: 10 }}>
-                  <Text style={{ color: '#664D03', textAlign: 'center' }}>Local test environment</Text>
-                </View>
-              )}
               <AppNavigator />
             </NavigationContainer>
           </AuthProvider>
@@ -65,7 +60,7 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
+ 
 const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
@@ -108,4 +103,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
+ 

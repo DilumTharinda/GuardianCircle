@@ -5,12 +5,3 @@ node_modules/
 .idea/
 .gradle/
 .expo/
-.env
-.env.*
-!.env.example
-*serviceAccount*.json
-
-.m5-validation/
-firebase-debug.log*
-firestore-debug.log*
-ui-debug.log*
