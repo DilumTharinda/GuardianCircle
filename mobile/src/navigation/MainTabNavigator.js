@@ -15,8 +15,6 @@ import LostFoundNavigator from './LostFoundNavigator';
 import ProfileScreen from '../screens/account/ProfileScreen';
 import ParentDashboardScreen from '../screens/parentchild/ParentDashboardScreen';
 
-import ChildDashboardScreen from '../screens/parentchild/ChildDashboardScreen';
-
 const Tab = createBottomTabNavigator();
 
 // Icon map — Ionicons name for each route
@@ -65,7 +63,7 @@ export default function MainTabNavigator() {
     >
       <Tab.Screen
         name={ROUTES.HOME}
-        component={parentMode ? ParentDashboardScreen : childMode ? ChildDashboardScreen : HomeScreen}
+        component={parentMode ? ParentDashboardScreen : HomeScreen}
         options={{ 
           title: parentMode ? 'Family' : 'Home', 
           tabBarLabel: parentMode ? 'Family' : 'Home', 

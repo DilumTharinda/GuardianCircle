@@ -7,12 +7,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest --watchAll=false",
-    "test:services": "node --test tests/*.test.cjs",
-    "test:m5": "node --test tests/m5*.test.cjs",
-    "test:rules": "node --test tests/emulator/m5Rules.test.cjs",
-    "start:local": "node scripts/startM5Local.cjs",
-    "test:m5:local": "node scripts/checkM5Local.cjs"
+    "test": "jest --watchAll=false"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
@@ -36,13 +31,13 @@
     "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.11",
     "expo-location": "~57.0.20",
-    "expo-modules-core": "~57.0.18",
     "expo-notifications": "~57.0.21",
     "expo-secure-store": "~57.0.4",
     "expo-sensors": "~57.0.3",
     "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-modules-core": "~57.0.18",
     "expo-task-manager": "~57.0.21",
     "firebase": "^12.18.0",
     "ngeohash": "^0.6.4",
@@ -58,10 +53,9 @@
   "private": true,
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
-    "@firebase/rules-unit-testing": "^5.0.2",
-    "@testing-library/react-native": "^13.0.0",
     "jest": "^29.7.0",
     "jest-expo": "~57.0.0",
+    "@testing-library/react-native": "^13.0.0",
     "react-test-renderer": "19.2.3"
   },
   "jest": {

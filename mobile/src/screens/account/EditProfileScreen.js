@@ -169,16 +169,16 @@ export default function EditProfileScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Account Role</Text>
-          <Text style={styles.helperText}>Your account role is fixed for tracking security.</Text>
+          <Text style={styles.helperText}>Changing your role requires password verification.</Text>
           
           <View style={styles.roleContainer}>
-            {SELECTABLE_ROLES.filter(r => r.value === userProfile?.role).map((r) => {
+            {SELECTABLE_ROLES.map((r) => {
               const selected = role === r.value;
               return (
                 <TouchableOpacity
                   key={r.value}
                   style={[styles.roleCard, selected && styles.roleCardSelected]}
-                  onPress={() => {}}
+                  onPress={() => setRole(r.value)}
                   disabled={loading}
                 >
                   <Text style={[styles.roleText, selected && styles.roleTextSelected]}>
