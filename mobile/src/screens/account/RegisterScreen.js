@@ -32,6 +32,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { SELECTABLE_ROLES, ROLES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
@@ -76,6 +77,7 @@ export default function RegisterScreen() {
   const navigation = useNavigation();
   const { register, loginWithGoogle } = useAuth();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   // Form state
   const [step, setStep] = useState(1);
@@ -103,7 +105,7 @@ export default function RegisterScreen() {
   useEffect(() => {
     Animated.sequence([
       Animated.timing(headerAnim, {
-        toValue: 1, duration: 450, useNativeDriver: false,
+        toValue: 1, duration: 500, useNativeDriver: false,
       }),
       Animated.parallel([
         Animated.timing(formOpacity, {
@@ -248,14 +250,14 @@ export default function RegisterScreen() {
     }
   }
 
-  const headerHeightAnim = headerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '28%'],
-  });
-
   const progressBarWidth = progressWidth.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
+  });
+
+  const headerHeightInterpolated = headerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '38%'],
   });
 
   const styles = getStyles(colors);
@@ -264,23 +266,29 @@ export default function RegisterScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
 
-      {/* Animated dark green header */}
-      <Animated.View style={[styles.headerWrapper, { height: headerHeightAnim }]}>
+      {/* Green gradient header — same as LoginScreen */}
+      <Animated.View style={[styles.headerWrapper, { height: headerHeightInterpolated }]}>
         <LinearGradient
           colors={[colors.darkGreen, colors.darkGreenMid]}
-          style={styles.headerGradient}
+          style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => step > 1 ? handleBack() : navigation.goBack()}
-            >
-              <Ionicons name="chevron-back" size={22} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Create account</Text>
-            <Text style={styles.headerStep}>{step} of {TOTAL_STEPS}</Text>
+          {/* Back button */}
+          <TouchableOpacity
+            style={[styles.backButton, { top: insets.top + 10 }]}
+            onPress={() => step > 1 ? handleBack() : navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Logo area — same as LoginScreen */}
+          <View style={styles.logoArea}>
+            <View style={styles.logoCircle}>
+              <MaterialCommunityIcons name="shield-check" size={34} color="#fff" />
+            </View>
+            <Text style={styles.logoText}>Create Account</Text>
+            <Text style={styles.headerStep}>Step {step} of {TOTAL_STEPS}</Text>
           </View>
 
           {/* Progress bar */}
@@ -666,21 +674,29 @@ const getStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
 
-  // Header
+  // Header — mirrors LoginScreen
   headerWrapper: { width: '100%', overflow: 'hidden' },
   headerGradient: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingHorizontal: SPACING.base,
-    paddingBottom: SPACING.lg,
-    justifyContent: 'space-between',
-  },
-  headerContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING.base,
+    paddingBottom: SPACING.md,
+  },
+  headerCurve: {
+    position: 'absolute',
+    bottom: -20,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
   },
   backButton: {
+    position: 'absolute',
+    top: 0,
+    left: SPACING.base,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -688,10 +704,24 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
+
+  // Logo area — same as LoginScreen
+  logoArea: { alignItems: 'center', gap: SPACING.sm },
+  logoCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.45)',
+  },
+  logoText: {
     fontSize: FONTS.md,
     fontWeight: FONTS.bold,
     color: '#fff',
+    letterSpacing: 0.4,
   },
   headerStep: {
     fontSize: FONTS.sm,
@@ -704,24 +734,16 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: RADIUS.full,
     marginTop: SPACING.md,
     overflow: 'hidden',
+    alignSelf: 'stretch',
+    marginHorizontal: SPACING.xl,
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#fff',
     borderRadius: RADIUS.full,
   },
-  headerCurve: {
-    position: 'absolute',
-    bottom: -20,
-    left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-  },
 
-  // Scroll + Card
+  // Scroll + Card — same as LoginScreen
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: SPACING.base,
@@ -734,7 +756,7 @@ const getStyles = (colors) => StyleSheet.create({
     padding: SPACING.xl,
   },
 
-  // Step content
+  // Step content — same font sizes as LoginScreen welcome/sub
   stepTitle: {
     fontSize: FONTS.xl,
     fontWeight: FONTS.bold,
@@ -748,7 +770,7 @@ const getStyles = (colors) => StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Error
+  // Error — same as LoginScreen
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -766,7 +788,7 @@ const getStyles = (colors) => StyleSheet.create({
     fontWeight: FONTS.medium,
   },
 
-  // Fields
+  // Fields — same as LoginScreen
   fieldGroup: { marginBottom: SPACING.md },
   fieldLabel: {
     fontSize: FONTS.sm,
@@ -857,7 +879,7 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Divider
+  // Divider — same as LoginScreen
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -867,7 +889,7 @@ const getStyles = (colors) => StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { fontSize: FONTS.sm, color: colors.textMuted },
 
-  // Google
+  // Google — same as LoginScreen
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -890,7 +912,7 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
   },
 
-  // Button
+  // Button — same as LoginScreen
   buttonWrapper: { marginTop: SPACING.lg, marginBottom: SPACING.md },
   primaryButton: { borderRadius: RADIUS.md, overflow: 'hidden' },
   primaryButtonDisabled: { opacity: 0.7 },
@@ -910,7 +932,7 @@ const getStyles = (colors) => StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Login link
+  // Login link — same as LoginScreen register row
   loginRow: { flexDirection: 'row', justifyContent: 'center' },
   loginPrompt: { fontSize: FONTS.sm, color: colors.textSecondary },
   loginLink: { fontSize: FONTS.sm, fontWeight: FONTS.bold, color: colors.darkGreenMid },

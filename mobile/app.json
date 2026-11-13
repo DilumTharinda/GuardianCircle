@@ -10,7 +10,12 @@
     ],
     "android": {
       "package": "com.guardiancircle.app",
-      "versionCode": 1
+      "versionCode": 1,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAFziXsvVoBvUsa7lmESCDlpB5aDhe7QZY"
+        }
+      }
     },
     "ios": {
       "bundleIdentifier": "com.guardiancircle.app",

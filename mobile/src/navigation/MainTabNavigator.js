@@ -80,7 +80,7 @@ export default function MainTabNavigator() {
         <Tab.Screen
           name={ROUTES.MAP}
           component={MapScreen}
-          options={{ title: 'Map', tabBarLabel: 'Map' }}
+          options={{ title: 'Map', tabBarLabel: 'Map', headerShown: false }}
         />
       )}
       <Tab.Screen
