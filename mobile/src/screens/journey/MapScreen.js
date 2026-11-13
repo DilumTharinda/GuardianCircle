@@ -11,11 +11,14 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  DeviceEventEmitter,
   Dimensions,
+  Keyboard,
   Platform,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -33,11 +36,13 @@ import { DARK_MAP_STYLE } from '../../constants/mapStyles';
 import { useUnsafeZones } from '../../hooks/useUnsafeZones';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationReportModal';
+import { getRouteCandidates, rankRouteCandidates } from '../../services/saferRouteService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 let MapView = null;
 let Marker = null;
+let Polyline = null;
 let PROVIDER_GOOGLE = null;
 
 if (Platform.OS !== 'web') {
@@ -45,6 +50,7 @@ if (Platform.OS !== 'web') {
     const Maps = require('react-native-maps');
     MapView = Maps.default || Maps;
     Marker = Maps.Marker;
+    Polyline = Maps.Polyline;
     PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
   } catch (e) {
     console.warn('[MapScreen] Map library not loaded:', e.message);
@@ -59,24 +65,117 @@ function getCoordsDistanceMeters(c1, c2) {
   return Math.sqrt(dLat * dLat + dLng * dLng);
 }
 
+// Geocode search query (city, shop, landmark, address) into coordinates
+async function searchPlaceCoordinates(query) {
+  if (!query || typeof query !== 'string' || !query.trim()) return null;
+  const clean = query.trim();
+
+  // 1. Try native Expo Location geocoder (uses Google Play Services / Apple Maps)
+  try {
+    const results = await Location.geocodeAsync(clean);
+    if (results && results.length > 0 && typeof results[0].latitude === 'number') {
+      return {
+        latitude: results[0].latitude,
+        longitude: results[0].longitude,
+        name: clean,
+      };
+    }
+  } catch (_) {}
+
+  // 2. Reliable fallback to OpenStreetMap Nominatim geocoding API
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(clean)}&format=json&limit=1`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'GuardianCircle/1.0',
+        Accept: 'application/json',
+      },
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+        return {
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon),
+          name: data[0].display_name ? data[0].display_name.split(',')[0].trim() : clean,
+        };
+      }
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+// Fetch fast auto-suggestions matching places as user types (cities, shops, places)
+async function fetchPlaceSuggestions(query) {
+  if (!query || query.trim().length < 2) return [];
+  const clean = query.trim();
+
+  // 1. Try Photon autocomplete API (designed for instant typing search)
+  try {
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(clean)}&limit=4`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.features) && data.features.length > 0) {
+        return data.features.map((f) => {
+          const p = f.properties || {};
+          const coords = f.geometry?.coordinates || [];
+          const subtitleParts = [p.street, p.city || p.locality || p.district, p.country].filter(Boolean);
+          return {
+            title: p.name || clean,
+            subtitle: subtitleParts.join(', '),
+            latitude: coords[1],
+            longitude: coords[0],
+            type: p.osm_value || p.type || 'place',
+          };
+        }).filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+      }
+    }
+  } catch (_) {}
+
+  // 2. Reliable fallback to OpenStreetMap Nominatim
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(clean)}&format=json&limit=4&addressdetails=1`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'GuardianCircle/1.0', Accept: 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((item) => {
+          const parts = (item.display_name || '').split(',');
+          return {
+            title: parts[0]?.trim() || clean,
+            subtitle: parts.slice(1, 3).join(',').trim(),
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon),
+            type: item.type || 'place',
+          };
+        }).filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+      }
+    }
+  } catch (_) {}
+
+  return [];
+}
+
 // Dynamic multi-tier zoom sizing matching map objects and roads
 function getZoomMetrics(level) {
   switch (level) {
     case 5: // Very close street / road view (< 0.003 delta)
-      return { level: 5, humanSize: 52, warningSize: 32, badgeSize: 64, ringD: 64, containerSize: 128 };
+      return { level: 5, humanSize: 52, warningSize: 32, badgeSize: 64, ringD: 64, containerSize: 154 };
     case 4: // Close street / neighborhood (< 0.008 delta)
-      return { level: 4, humanSize: 46, warningSize: 28, badgeSize: 54, ringD: 54, containerSize: 110 };
+      return { level: 4, humanSize: 46, warningSize: 28, badgeSize: 54, ringD: 54, containerSize: 130 };
     case 3: // Suburb / standard default (< 0.025 delta)
-      return { level: 3, humanSize: 40, warningSize: 24, badgeSize: 48, ringD: 48, containerSize: 96 };
+      return { level: 3, humanSize: 40, warningSize: 24, badgeSize: 48, ringD: 48, containerSize: 116 };
     case 2: // City view (< 0.08 delta)
-      return { level: 2, humanSize: 34, warningSize: 20, badgeSize: 40, ringD: 40, containerSize: 82 };
+      return { level: 2, humanSize: 34, warningSize: 20, badgeSize: 40, ringD: 40, containerSize: 96 };
     case 1: // State / country view (>= 0.08 delta)
     default:
-      return { level: 1, humanSize: 28, warningSize: 16, badgeSize: 34, ringD: 34, containerSize: 70 };
+      return { level: 1, humanSize: 28, warningSize: 16, badgeSize: 34, ringD: 34, containerSize: 82 };
   }
 }
 
-export default function MapScreen() {
+export default function MapScreen({ navigation, route }) {
   const { user } = useAuth();
   const { isDark, toggleTheme, colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -90,6 +189,30 @@ export default function MapScreen() {
   const [isMoving, setIsMoving] = useState(false);
   const [zoomMetrics, setZoomMetrics] = useState(() => getZoomMetrics(3));
   const lastZoomLevel = useRef(3);
+
+  // Search Place & Safest Route State
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const debounceTimer = useRef(null);
+  const [searchLocation, setSearchLocation] = useState(null); // { latitude, longitude, name }
+  const [activeRoute, setActiveRoute] = useState(null); // { coordinates, distance, duration, safetyLabel, name }
+
+  // Open half window for unsafe location reporting when double-tapped on Map tab icon
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('OPEN_UNSAFE_REPORT', () => {
+      setReportOpen(true);
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (route?.params?.openReport) {
+      setReportOpen(true);
+      navigation?.setParams?.({ openReport: undefined });
+    }
+  }, [route?.params?.openReport, navigation]);
 
   const mapRef = useRef(null);
   const headingSubscription = useRef(null);
@@ -150,9 +273,126 @@ export default function MapScreen() {
     };
   }, [ring1Scale, ring1Opacity, ring2Scale, ring2Opacity, coreScale]);
 
+  // ── Two-Finger Pinch Zoom Detection & Dynamic Circle Buttons ────────────────
+  const [zoomButtonsVisible, setZoomButtonsVisible] = useState(false);
+  const zoomButtonsAnim = useRef(new Animated.Value(0)).current;
+  const zoomHideTimer = useRef(null);
+  const currentRegionRef = useRef(null);
+  const initialPinchDist = useRef(null);
+
+  const showZoomButtons = useCallback(() => {
+    setZoomButtonsVisible(true);
+    Animated.timing(zoomButtonsAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+
+    if (zoomHideTimer.current) {
+      clearTimeout(zoomHideTimer.current);
+    }
+    // Automatically hide after 2.5 seconds of inactivity
+    zoomHideTimer.current = setTimeout(() => {
+      Animated.timing(zoomButtonsAnim, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start(() => {
+        setZoomButtonsVisible(false);
+      });
+    }, 2500);
+  }, [zoomButtonsAnim]);
+
+  useEffect(() => {
+    return () => {
+      if (zoomHideTimer.current) clearTimeout(zoomHideTimer.current);
+    };
+  }, []);
+
+  // ONLY detect two-finger pinch-in / pinch-out gestures (spreading or pinching fingers)
+  // Movement, rotation, single-finger panning, and compass updates will NEVER trigger this.
+  const handleTouchStart = useCallback((e) => {
+    const touches = e?.nativeEvent?.touches;
+    if (touches && touches.length === 2) {
+      const dx = touches[0].pageX - touches[1].pageX;
+      const dy = touches[0].pageY - touches[1].pageY;
+      initialPinchDist.current = Math.sqrt(dx * dx + dy * dy);
+    } else {
+      initialPinchDist.current = null;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e) => {
+    const touches = e?.nativeEvent?.touches;
+    if (touches && touches.length === 2 && initialPinchDist.current !== null) {
+      const dx = touches[0].pageX - touches[1].pageX;
+      const dy = touches[0].pageY - touches[1].pageY;
+      const currentDist = Math.sqrt(dx * dx + dy * dy);
+      const delta = Math.abs(currentDist - initialPinchDist.current);
+
+      // Only show buttons when user actively pinches or spreads two fingers (distance delta > 18px).
+      // Twisting two fingers (rotation) or holding them in place keeps distance constant and does NOT show buttons.
+      if (delta > 18) {
+        showZoomButtons();
+      }
+    }
+  }, [showZoomButtons]);
+
+  const handleTouchEnd = useCallback((e) => {
+    const touches = e?.nativeEvent?.touches;
+    if (!touches || touches.length < 2) {
+      initialPinchDist.current = null;
+    }
+  }, []);
+
+  const handleZoomIn = useCallback(async () => {
+    showZoomButtons();
+    if (!mapRef.current) return;
+    try {
+      const camera = await mapRef.current.getCamera();
+      if (camera && typeof camera.zoom === 'number') {
+        mapRef.current.animateCamera({ zoom: Math.min(camera.zoom + 1, 20) }, { duration: 250 });
+        return;
+      }
+    } catch (_) {}
+    if (currentRegionRef.current) {
+      const { latitude, longitude, latitudeDelta, longitudeDelta } = currentRegionRef.current;
+      mapRef.current.animateToRegion({
+        latitude,
+        longitude,
+        latitudeDelta: Math.max(latitudeDelta / 2, 0.0005),
+        longitudeDelta: Math.max(longitudeDelta / 2, 0.0005),
+      }, 250);
+    }
+  }, [showZoomButtons]);
+
+  const handleZoomOut = useCallback(async () => {
+    showZoomButtons();
+    if (!mapRef.current) return;
+    try {
+      const camera = await mapRef.current.getCamera();
+      if (camera && typeof camera.zoom === 'number') {
+        mapRef.current.animateCamera({ zoom: Math.max(camera.zoom - 1, 2) }, { duration: 250 });
+        return;
+      }
+    } catch (_) {}
+    if (currentRegionRef.current) {
+      const { latitude, longitude, latitudeDelta, longitudeDelta } = currentRegionRef.current;
+      mapRef.current.animateToRegion({
+        latitude,
+        longitude,
+        latitudeDelta: Math.min(latitudeDelta * 2, 1.0),
+        longitudeDelta: Math.min(longitudeDelta * 2, 1.0),
+      }, 250);
+    }
+  }, [showZoomButtons]);
+
   const handleRegionChange = useCallback((currentRegion) => {
     if (!currentRegion?.latitudeDelta) return;
+    currentRegionRef.current = currentRegion;
+
     const delta = Math.max(currentRegion.latitudeDelta, 0.0005);
+
     let newLevel = 3;
     if (delta < 0.003) newLevel = 5;
     else if (delta < 0.008) newLevel = 4;
@@ -507,6 +747,139 @@ export default function MapScreen() {
     setHeadingMode((prev) => !prev);
   }, []);
 
+  const handleCancelRoute = useCallback(() => {
+    setActiveRoute(null);
+    setSearchLocation(null);
+    setSearchQuery('');
+    setSuggestions([]);
+    setSearchOpen(false);
+    setSearching(false);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    moveToCurrentLocation();
+  }, [moveToCurrentLocation]);
+
+  const handleToggleSearch = useCallback(() => {
+    if (activeRoute || searchOpen) {
+      handleCancelRoute();
+    } else {
+      setSearchOpen(true);
+    }
+  }, [activeRoute, searchOpen, handleCancelRoute]);
+
+  const handleQueryChange = useCallback((text) => {
+    setSearchQuery(text);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    if (!text || text.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(async () => {
+      const results = await fetchPlaceSuggestions(text);
+      setSuggestions(results);
+    }, 250);
+  }, []);
+
+  const handleRouteToDestination = useCallback(async (destinationPlace) => {
+    Keyboard.dismiss();
+    setSearching(true);
+    setSearchOpen(false);
+    setSuggestions([]);
+
+    try {
+      setSearchLocation(destinationPlace);
+
+      const origin = locationState.status === 'success'
+        ? { latitude: locationState.latitude, longitude: locationState.longitude }
+        : DEFAULT_COORDS;
+      const destination = { latitude: destinationPlace.latitude, longitude: destinationPlace.longitude };
+
+      let routeCoords = [];
+      let distanceStr = '';
+      let durationStr = '';
+      let safetyLabel = 'Shortest Route';
+
+      try {
+        const candidates = await getRouteCandidates(origin, destination);
+        const ranked = rankRouteCandidates(candidates, unsafeZones.points || []);
+
+        if (ranked.routes && ranked.routes.length > 0) {
+          const best = ranked.routes[0];
+          routeCoords = best.coordinates;
+          distanceStr = `${(best.distanceMeters / 1000).toFixed(1)} km`;
+          durationStr = `${Math.round(best.durationSeconds / 60)} min`;
+          if (best.riskScore != null) {
+            safetyLabel = best.riskScore === 0 ? 'Safest · 0 Unsafe Reports' : 'Safest Route';
+          }
+        }
+      } catch (routingErr) {
+        console.warn('[MapScreen] Routing candidate fetch failed:', routingErr?.message);
+      }
+
+      // Direct fallback path if OSRM service is offline or returned no segments
+      if (!routeCoords || routeCoords.length < 2) {
+        routeCoords = [origin, destination];
+        const directKm = (getCoordsDistanceMeters(origin, destination) / 1000).toFixed(1);
+        distanceStr = `${directKm} km`;
+        durationStr = `${Math.round(directKm * 2)} min`;
+        safetyLabel = 'Direct Route';
+      }
+
+      setActiveRoute({
+        coordinates: routeCoords,
+        distance: distanceStr,
+        duration: durationStr,
+        safetyLabel,
+        name: destinationPlace.name || destinationPlace.title,
+      });
+
+      if (mapRef.current) {
+        setTimeout(() => {
+          mapRef.current?.fitToCoordinates([origin, ...routeCoords, destination], {
+            edgePadding: { top: 130, right: 60, bottom: 160, left: 60 },
+            animated: true,
+          });
+        }, 200);
+      }
+    } catch (e) {
+      Alert.alert('Routing Failed', 'Could not compute route to location. Please try again.');
+    } finally {
+      setSearching(false);
+    }
+  }, [locationState, unsafeZones.points]);
+
+  const handleSelectSuggestion = useCallback((place) => {
+    setSearchQuery(place.title);
+    handleRouteToDestination({
+      latitude: place.latitude,
+      longitude: place.longitude,
+      name: place.title,
+    });
+  }, [handleRouteToDestination]);
+
+  const handleSearchAndRoute = useCallback(async () => {
+    if (!searchQuery.trim()) return;
+    Keyboard.dismiss();
+    setSearching(true);
+
+    try {
+      const place = await searchPlaceCoordinates(searchQuery);
+      if (!place) {
+        Alert.alert(
+          'Location Not Found',
+          `Could not find "${searchQuery.trim()}". Please check spelling or try a nearby city or shop name.`,
+          [{ text: 'OK' }]
+        );
+        setSearching(false);
+        return;
+      }
+      await handleRouteToDestination(place);
+    } catch (_) {
+      setSearching(false);
+    }
+  }, [searchQuery, handleRouteToDestination]);
+
   const styles = getStyles(colors, isDark, insets);
 
   if (!mapAvailable) {
@@ -538,7 +911,13 @@ export default function MapScreen() {
         isMoving={isMoving}
       />
 
-      <View style={styles.mapContainer}>
+      <View
+        style={styles.mapContainer}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
         <MapView
           ref={mapRef}
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
@@ -552,12 +931,12 @@ export default function MapScreen() {
           onRegionChange={handleRegionChange}
           onRegionChangeComplete={handleRegionChange}
         >
-          {/* 1. Live User Location Marker (Dual SOS-Style Pulse Rings + Breathing Core) */}
+          {/* 1. Live User Location Marker (Human icon shown very near native blue dot) */}
           {locationState.status === 'success' && (
             <Marker
               key={`user-loc-${isMoving ? 'walk' : 'stop'}-z${zoomMetrics.level}`}
               coordinate={{ latitude: locationState.latitude, longitude: locationState.longitude }}
-              anchor={{ x: 0.1, y: 0.5 }}
+              anchor={{ x: 0.28, y: 0.5 }}
               title="My Live Location"
               tracksViewChanges={true}
               zIndex={999}
@@ -688,7 +1067,160 @@ export default function MapScreen() {
               </View>
             </Marker>
           ))}
+
+          {/* 3. Highlighted Route Path (Google Maps Style) */}
+          {activeRoute && Polyline && (
+            <>
+              {/* Outer Casing Line (Dark Navigation Border #1558B0) */}
+              <Polyline
+                coordinates={activeRoute.coordinates}
+                strokeColor="#1558B0"
+                strokeWidth={7}
+                lineCap="round"
+                lineJoin="round"
+                zIndex={40}
+              />
+              {/* Inner Highlighting Line (Google Maps Navigation Blue #4285F4) */}
+              <Polyline
+                coordinates={activeRoute.coordinates}
+                strokeColor="#4285F4"
+                strokeWidth={5}
+                lineCap="round"
+                lineJoin="round"
+                zIndex={41}
+              />
+            </>
+          )}
+
+          {/* 4. Search Destination Location Marker */}
+          {searchLocation && (
+            <Marker
+              coordinate={{ latitude: searchLocation.latitude, longitude: searchLocation.longitude }}
+              anchor={{ x: 0.5, y: 1.0 }}
+              title={searchLocation.name}
+              description={activeRoute ? `${activeRoute.distance} (${activeRoute.duration})` : undefined}
+              zIndex={995}
+            >
+              <View style={styles.destinationPinContainer}>
+                <View style={styles.destinationPinBadge}>
+                  <Ionicons name="location" size={24} color="#FFF" />
+                </View>
+                <View style={styles.destinationPinTriangle} />
+              </View>
+            </Marker>
+          )}
         </MapView>
+
+        {/* Top-Left Search / Cancel Button (Single dedicated cancel button) */}
+        <TouchableOpacity
+          style={[
+            styles.searchButton,
+            (activeRoute || searchOpen) && styles.searchButtonActiveRoute,
+          ]}
+          onPress={handleToggleSearch}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={activeRoute || searchOpen ? 'Cancel' : 'Search Location'}
+        >
+          {activeRoute || searchOpen ? (
+            <Ionicons name="close" size={24} color="#D32F2F" />
+          ) : (
+            <Ionicons name="search" size={20} color={colors.darkGreenMid} />
+          )}
+        </TouchableOpacity>
+
+        {/* Floating Search Input Bar (Placed right beside the top-left button) */}
+        {searchOpen && (
+          <View style={styles.searchBarContainer}>
+            <TextInput
+              style={styles.searchBarInput}
+              value={searchQuery}
+              onChangeText={handleQueryChange}
+              placeholder="Search city, shop, or place..."
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="search"
+              onSubmitEditing={handleSearchAndRoute}
+              autoFocus={true}
+            />
+
+            {searching ? (
+              <ActivityIndicator size="small" color={colors.darkGreenMid} style={{ marginRight: 6 }} />
+            ) : (
+              <TouchableOpacity
+                style={styles.searchBarSubmitBtn}
+                onPress={handleSearchAndRoute}
+                disabled={!searchQuery.trim()}
+                accessibilityLabel="Find Route"
+              >
+                <LinearGradient
+                  colors={[colors.darkGreen, colors.darkGreenLight]}
+                  style={styles.searchBarSubmitGradient}
+                >
+                  <Ionicons name="arrow-forward" size={16} color="#FFF" />
+                </LinearGradient>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Auto-Suggestion Matching Places Dropdown */}
+        {searchOpen && suggestions.length > 0 && (
+          <View style={styles.suggestionsDropdown}>
+            {suggestions.map((item, index) => (
+              <TouchableOpacity
+                key={`${item.latitude}-${item.longitude}-${index}`}
+                style={[
+                  styles.suggestionRow,
+                  index === suggestions.length - 1 && styles.suggestionRowLast,
+                ]}
+                onPress={() => handleSelectSuggestion(item)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.suggestionIconBox}>
+                  <Ionicons
+                    name={
+                      item.type === 'shop' || item.type === 'supermarket'
+                        ? 'cart-outline'
+                        : item.type === 'city' || item.type === 'town'
+                        ? 'business-outline'
+                        : 'location-outline'
+                    }
+                    size={18}
+                    color={colors.darkGreenMid}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.suggestionTitle} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  {item.subtitle ? (
+                    <Text style={styles.suggestionSubtitle} numberOfLines={1}>
+                      {item.subtitle}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Floating Route Summary Banner (Single Cancel button in top-left, no duplicate here) */}
+        {activeRoute && !searchOpen && (
+          <View style={styles.routeSummaryBanner}>
+            <View style={styles.routeSummaryIcon}>
+              <Ionicons name="navigate" size={18} color="#FFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.routeSummaryTitle} numberOfLines={1}>
+                {activeRoute.name}
+              </Text>
+              <Text style={styles.routeSummarySubtitle}>
+                {activeRoute.distance} · {activeRoute.duration} · {activeRoute.safetyLabel}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {locationState.status === 'loading' && (
           <View style={styles.floatingLoadingBadge}>
@@ -707,23 +1239,44 @@ export default function MapScreen() {
           </View>
         </TouchableOpacity>
 
-        <View style={styles.actionBar}>
+        {/* Dynamic Zoom In & Zoom Out Circle Buttons (Bottom Right Corner) */}
+        <Animated.View
+          style={[
+            styles.zoomControlsContainer,
+            {
+              opacity: zoomButtonsAnim,
+              transform: [
+                {
+                  scale: zoomButtonsAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.75, 1.0],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents={zoomButtonsVisible ? 'auto' : 'none'}
+        >
           <TouchableOpacity
-            style={styles.reportButton}
-            onPress={() => setReportOpen(true)}
-            activeOpacity={0.8}
+            style={styles.zoomCircleBtn}
+            onPress={handleZoomIn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom In"
           >
-            <LinearGradient
-              colors={[colors.darkGreen, colors.darkGreenLight]}
-              style={styles.reportButtonGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Ionicons name="warning-outline" size={16} color="#FFF" style={{ marginRight: 6 }} />
-              <Text style={styles.reportButtonText}>Report Unsafe Location</Text>
-            </LinearGradient>
+            <Ionicons name="add" size={24} color={colors.darkGreenMid} />
           </TouchableOpacity>
-        </View>
+
+          <TouchableOpacity
+            style={[styles.zoomCircleBtn, { marginTop: 10 }]}
+            onPress={handleZoomOut}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom Out"
+          >
+            <Ionicons name="remove" size={24} color={colors.darkGreenMid} />
+          </TouchableOpacity>
+        </Animated.View>
 
         <TouchableOpacity
           style={styles.fab}
@@ -813,7 +1366,7 @@ const getStyles = (colors, isDark, insets) => {
     mapContainer: { flex: 1, position: 'relative' },
     floatingLoadingBadge: {
       position: 'absolute',
-      top: 16,
+      top: 68,
       left: 16,
       flexDirection: 'row',
       alignItems: 'center',
@@ -834,36 +1387,15 @@ const getStyles = (colors, isDark, insets) => {
     },
     statusContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
     statusTitle: { fontSize: 20, fontWeight: 'bold', color: colors.textPrimary, textAlign: 'center', marginTop: 10 },
-    actionBar: {
-      position: 'absolute',
-      bottom: TAB_BAR_H + 20,
-      left: 20,
-      right: 20,
-      zIndex: 15,
-    },
-    reportButton: {
-      borderRadius: RADIUS.full,
-      overflow: 'hidden',
-      ...SHADOWS.medium,
-    },
-    reportButtonGradient: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-    },
-    reportButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
     userMarkerContainer: {
       alignItems: 'center',
       justifyContent: 'center',
-      marginLeft: 4,
     },
     userPulseRingBase: {
       position: 'absolute',
       backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderColor: 'rgba(255, 255, 255, 0.95)',
+      borderWidth: 2.5,
+      borderColor: '#FFFFFF',
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.65,
@@ -886,9 +1418,14 @@ const getStyles = (colors, isDark, insets) => {
     },
     warningPulseRingBase: {
       position: 'absolute',
-      backgroundColor: 'rgba(229, 57, 53, 0.40)',
-      borderWidth: 1.5,
-      borderColor: 'rgba(244, 67, 54, 0.85)',
+      backgroundColor: 'transparent',
+      borderWidth: 2.5,
+      borderColor: 'rgba(244, 67, 54, 0.95)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.65,
+      shadowRadius: 3,
+      elevation: 4,
     },
     warningMarkerBadge: {
       backgroundColor: colors.dangerRed || '#D32F2F',
@@ -901,6 +1438,170 @@ const getStyles = (colors, isDark, insets) => {
       shadowOpacity: 0.9,
       shadowRadius: 5,
       elevation: 8,
+    },
+    searchButton: {
+      position: 'absolute',
+      top: 16,
+      left: 16,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: isDark ? colors.surface : '#FFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...SHADOWS.small,
+      zIndex: 20,
+    },
+    searchButtonActiveRoute: {
+      backgroundColor: isDark ? 'rgba(211, 47, 47, 0.22)' : '#FFEBEE',
+      borderColor: '#EF5350',
+    },
+    searchBarContainer: {
+      position: 'absolute',
+      top: 16,
+      left: 68,
+      right: 16,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: isDark ? colors.surface : '#FFF',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: 14,
+      paddingRight: 5,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...SHADOWS.medium,
+      zIndex: 30,
+    },
+    searchBarInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.textPrimary,
+      paddingVertical: 0,
+    },
+    searchBarSubmitBtn: {
+      borderRadius: 17,
+      overflow: 'hidden',
+    },
+    searchBarSubmitGradient: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    suggestionsDropdown: {
+      position: 'absolute',
+      top: 68,
+      left: 16,
+      right: 16,
+      backgroundColor: isDark ? colors.surface : '#FFFFFF',
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      ...SHADOWS.large,
+      zIndex: 40,
+    },
+    suggestionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      gap: 10,
+    },
+    suggestionRowLast: {
+      borderBottomWidth: 0,
+    },
+    suggestionIconBox: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: isDark ? colors.darkGreenSurface : '#E8F5E9',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    suggestionTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    suggestionSubtitle: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: 1,
+    },
+    routeSummaryBanner: {
+      position: 'absolute',
+      top: 68,
+      left: 16,
+      right: 16,
+      backgroundColor: isDark ? 'rgba(26, 36, 32, 0.95)' : 'rgba(255, 255, 255, 0.97)',
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...SHADOWS.medium,
+      zIndex: 20,
+      gap: 10,
+    },
+    routeSummaryIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.darkGreenMid,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    routeSummaryTitle: {
+      fontSize: 13,
+      fontWeight: 'bold',
+      color: colors.textPrimary,
+    },
+    routeSummarySubtitle: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    destinationPinContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    destinationPinBadge: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: '#E53935',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: '#FFF',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.45,
+      shadowRadius: 4,
+      elevation: 7,
+    },
+    destinationPinTriangle: {
+      width: 0,
+      height: 0,
+      backgroundColor: 'transparent',
+      borderStyle: 'solid',
+      borderLeftWidth: 6,
+      borderRightWidth: 6,
+      borderBottomWidth: 0,
+      borderTopWidth: 8,
+      borderLeftColor: 'transparent',
+      borderRightColor: 'transparent',
+      borderTopColor: '#E53935',
+      marginTop: -2,
     },
     compassButton: {
       position: 'absolute',
@@ -920,10 +1621,29 @@ const getStyles = (colors, isDark, insets) => {
     compassButtonInactive: {
       opacity: 0.6,
     },
+    zoomControlsContainer: {
+      position: 'absolute',
+      right: 20,
+      bottom: TAB_BAR_H + 86,
+      alignItems: 'center',
+      zIndex: 25,
+    },
+    zoomCircleBtn: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: isDark ? colors.surface : '#FFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      elevation: 5,
+      ...SHADOWS.medium,
+    },
     fab: {
       position: 'absolute',
       right: 20,
-      bottom: TAB_BAR_H + 80,
+      bottom: TAB_BAR_H + 20,
       width: 56,
       height: 56,
       borderRadius: 28,

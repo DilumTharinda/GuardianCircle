@@ -47,14 +47,12 @@ export default function CommunityFeedScreen({ navigation }) {
       const lostQuery = query(
         collection(db, 'reports'),
         where('type', '==', 'lost'),
-        orderBy('createdAt', 'desc'),
-        limit(10)
+        limit(20)
       );
       const foundQuery = query(
         collection(db, 'reports'),
         where('type', '==', 'found'),
-        orderBy('createdAt', 'desc'),
-        limit(10)
+        limit(20)
       );
 
       const [lostSnap, foundSnap] = await Promise.all([
@@ -134,7 +132,7 @@ export default function CommunityFeedScreen({ navigation }) {
       <Text style={styles.sub}>Help confirm reports you recognize</Text>
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
+        <ActivityIndicator color={colors.darkGreenMid} style={{ marginTop: 20 }} />
       ) : reports.length === 0 ? (
         <Text style={styles.emptyText}>No reports yet.</Text>
       ) : (
