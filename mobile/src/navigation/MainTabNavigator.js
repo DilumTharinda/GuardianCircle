@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { isChild, isParent } from '../constants/roles';
@@ -31,6 +33,7 @@ export default function MainTabNavigator() {
   const { colors } = useTheme();
   const childMode = userProfile && isChild(userProfile.role);
   const parentMode = userProfile && isParent(userProfile.role);
+  const lastMapTapRef = useRef(0);
 
   return (
     <Tab.Navigator
@@ -81,6 +84,22 @@ export default function MainTabNavigator() {
           name={ROUTES.MAP}
           component={MapScreen}
           options={{ title: 'Map', tabBarLabel: 'Map', headerShown: false }}
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              const now = Date.now();
+              if (now - lastMapTapRef.current < 500) {
+                // Double tap detected on Map icon -> Open half window for unsafe location report
+                lastMapTapRef.current = 0;
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                } catch (_) {}
+                DeviceEventEmitter.emit('OPEN_UNSAFE_REPORT');
+                navigation.navigate(ROUTES.MAP, { openReport: now });
+              } else {
+                lastMapTapRef.current = now;
+              }
+            },
+          })}
         />
       )}
       <Tab.Screen

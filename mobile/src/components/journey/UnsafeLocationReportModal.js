@@ -132,7 +132,19 @@ export default function UnsafeLocationReportModal({ visible, uid, onClose, onRep
       onRequestClose={() => { if (!saving) onClose(); }}
     >
       <View style={styles.backdrop}>
+        {/* Tapping visible map backdrop dismisses the half window */}
+        <TouchableOpacity
+          style={styles.backdropDismiss}
+          activeOpacity={1}
+          onPress={() => { if (!saving) onClose(); }}
+          accessibilityLabel="Dismiss report window"
+        />
+
         <View style={styles.dialog} accessibilityViewIsModal>
+          {/* Half window drag handle */}
+          <View style={styles.dragHandleBar}>
+            <View style={styles.dragHandle} />
+          </View>
 
           {/* ── Header ───────────────────────────────────────────────── */}
           <LinearGradient
@@ -323,16 +335,32 @@ const getStyles = (colors, isDark) =>
   StyleSheet.create({
     backdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.55)',
+      backgroundColor: 'rgba(0,0,0,0.40)',
       justifyContent: 'flex-end',
     },
+    backdropDismiss: {
+      flex: 1,
+    },
     dialog: {
-      maxHeight: '90%',
+      height: '56%',
       backgroundColor: isDark ? colors.surface : '#FFFFFF',
       borderTopLeftRadius: RADIUS.xl,
       borderTopRightRadius: RADIUS.xl,
       overflow: 'hidden',
       ...SHADOWS.large,
+    },
+    dragHandleBar: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: 8,
+      paddingBottom: 4,
+      backgroundColor: colors.darkGreen,
+    },
+    dragHandle: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: 'rgba(255, 255, 255, 0.50)',
     },
 
     // Header

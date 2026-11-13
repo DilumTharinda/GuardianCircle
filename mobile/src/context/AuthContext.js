@@ -112,11 +112,22 @@ export function AuthProvider({ children }) {
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        setUserProfile(docSnap.data());
+        const profileData = docSnap.data();
+        setUserProfile(profileData);
+        await AsyncStorage.setItem(`@user_profile_${uid}`, JSON.stringify(profileData));
+        return;
       }
     } catch (e) {
-      console.warn('[AuthContext] Load profile fallback:', e);
+      console.warn('[AuthContext] Load profile fallback:', e?.message || e);
     }
+
+    // Offline fallback: load cached user profile from AsyncStorage
+    try {
+      const cached = await AsyncStorage.getItem(`@user_profile_${uid}`);
+      if (cached) {
+        setUserProfile(JSON.parse(cached));
+      }
+    } catch (_) {}
   }
 
   /**
