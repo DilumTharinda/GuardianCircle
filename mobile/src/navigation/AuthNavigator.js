@@ -25,12 +25,12 @@ export default function AuthNavigator() {
       <Stack.Screen
         name={ROUTES.REGISTER}
         component={RegisterScreen}
-        options={{ title: 'Create Account' }}
+        options={{ title: 'Create Account', headerShown: false }}
       />
       <Stack.Screen
         name={ROUTES.FORGOT_PASSWORD}
         component={ForgotPasswordScreen}
-        options={{ title: 'Reset Password' }}
+        options={{ title: 'Reset Password', headerShown: false }}
       />
     </Stack.Navigator>
   );

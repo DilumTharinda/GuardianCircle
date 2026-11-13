@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -45,7 +45,16 @@ try {
   auth = getAuth(app);
 }
 
-const db = getFirestore(app);
+// Use experimentalForceLongPolling to ensure reliable connectivity on React Native / Android / iOS
+// React Native's network stack does not support chunked WebChannel streaming, causing 10s timeouts.
+let db;
+try {
+  db = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  });
+} catch (e) {
+  db = getFirestore(app);
+}
 const storage = getStorage(app);
 
 export { app, auth, db, storage };

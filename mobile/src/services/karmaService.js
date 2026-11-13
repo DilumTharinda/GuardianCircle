@@ -32,7 +32,7 @@ export async function getKarmaScore(uid) {
     }
     return 0;
   } catch (error) {
-    console.log('Error fetching karma score:', error.message);
+    // Return default 0 gracefully if client is offline or network is warming up
     return 0;
   }
 }

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
+import { DARK_MAP_STYLE } from '../../constants/mapStyles';
 import { useTheme } from '../../context/ThemeContext';
 import {
   getChildren,
@@ -41,7 +42,7 @@ if (Platform.OS !== 'web') {
 }
 
 export default function ChildLocationScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const route = useRoute();
   const initialChildId = route.params?.childId;
 
@@ -209,6 +210,7 @@ export default function ChildLocationScreen() {
             ref={mapRef}
             provider={PROVIDER_GOOGLE}
             style={styles.map}
+            customMapStyle={isDark ? DARK_MAP_STYLE : []}
             initialRegion={childCoords}
             region={childCoords}
           >

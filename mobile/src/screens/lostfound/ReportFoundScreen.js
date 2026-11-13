@@ -13,6 +13,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import ngeohash from 'ngeohash';
+import { Ionicons } from '@expo/vector-icons';
 import {
   collection,
   addDoc,
@@ -20,7 +21,6 @@ import {
   updateDoc,
   query,
   where,
-  orderBy,
   limit,
   getDocs,
   serverTimestamp,
@@ -28,12 +28,19 @@ import {
 import { db } from '../../services/firebase';
 import { uploadImage } from '../../services/cloudinaryService';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { findMatchesForFoundReport } from '../../services/matchingService';
+import { RADIUS, SHADOWS } from '../../constants/theme';
+
+const CATEGORIES = ['Electronics', 'Documents', 'Pet', 'Bag', 'Jewelry', 'Other'];
 
 export default function ReportFoundScreen({ navigation }) {
   const { user } = useAuth();
+  const { colors, isDark } = useTheme();
+  const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [photoUri, setPhotoUri] = useState(null);
+  const [photoBase64, setPhotoBase64] = useState(null);
   const [location, setLocation] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [isLinkedToLost, setIsLinkedToLost] = useState(false);
@@ -46,20 +53,19 @@ export default function ReportFoundScreen({ navigation }) {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permissionResult.granted) {
-      Alert.alert(
-        'Permission needed',
-        'We need access to your photos to attach an image.'
-      );
+      Alert.alert('Permission needed', 'We need access to your photos to attach an image.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.5,
+      quality: 0.6,
+      base64: true,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets?.[0]) {
       setPhotoUri(result.assets[0].uri);
+      setPhotoBase64(result.assets[0].base64 || null);
     }
   }
 
@@ -69,18 +75,12 @@ export default function ReportFoundScreen({ navigation }) {
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission needed',
-          'Location permission is required to tag where you found this item.'
-        );
+        Alert.alert('Permission needed', 'Location permission is required to tag where you found this item.');
         return;
       }
 
       const loc = await Location.getCurrentPositionAsync({});
-      const geohash = ngeohash.encode(
-        loc.coords.latitude,
-        loc.coords.longitude
-      );
+      const geohash = ngeohash.encode(loc.coords.latitude, loc.coords.longitude);
 
       setLocation({
         latitude: loc.coords.latitude,
@@ -97,18 +97,21 @@ export default function ReportFoundScreen({ navigation }) {
   async function fetchLostReports() {
     setLoadingReports(true);
     try {
+      // Query without requiring composite index
       const q = query(
         collection(db, 'reports'),
         where('type', '==', 'lost'),
         where('status', '==', 'lost'),
-        orderBy('createdAt', 'desc'),
-        limit(20)
+        limit(30)
       );
       const snapshot = await getDocs(q);
-      const reports = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const reports = snapshot.docs
+        .map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }))
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
       setLostReports(reports);
     } catch (error) {
       console.log('Error fetching lost reports:', error.message);
@@ -125,10 +128,6 @@ export default function ReportFoundScreen({ navigation }) {
     }
   }
 
-  // Creates one "matches" record linking a found report to a candidate
-  // lost report. Stores BOTH reporters' user IDs directly on the match
-  // doc, so later we can find "matches involving me" with a simple
-  // query, instead of doing extra Firestore reads.
   async function createMatchRecord(lostReport, foundReportId) {
     await addDoc(collection(db, 'matches'), {
       lostReportId: lostReport.id,
@@ -146,23 +145,32 @@ export default function ReportFoundScreen({ navigation }) {
 
   async function handleSubmit() {
     if (!description || !location) {
-      Alert.alert(
-        'Missing information',
-        'Please fill in a description and location.'
-      );
+      Alert.alert('Missing information', 'Please fill in description and location.');
       return;
     }
 
     setSubmitting(true);
     try {
       let photoUrl = null;
-      if (photoUri) {
-        const uploadResult = await uploadImage(photoUri, 'found-items');
-        photoUrl = uploadResult.url;
+      if (photoBase64) {
+        try {
+          const uploadResult = await uploadImage(`data:image/jpeg;base64,${photoBase64}`, 'found-items');
+          photoUrl = uploadResult.url;
+        } catch (uploadErr) {
+          console.warn('[ReportFoundScreen] Image upload warning:', uploadErr.message);
+        }
+      } else if (photoUri) {
+        try {
+          const uploadResult = await uploadImage(photoUri, 'found-items');
+          photoUrl = uploadResult.url;
+        } catch (uploadErr) {
+          console.warn('[ReportFoundScreen] Image upload warning:', uploadErr.message);
+        }
       }
 
-      const foundReportData = {
+      const newReportData = {
         type: 'found',
+        category: category || selectedLostReport?.category || 'General',
         description,
         photoUrl,
         location: {
@@ -170,46 +178,21 @@ export default function ReportFoundScreen({ navigation }) {
           longitude: location.longitude,
         },
         geohash: location.geohash,
-        status: 'sighted',
+        status: 'found',
         reportedBy: user.uid,
         confidenceScore: 0,
         createdAt: serverTimestamp(),
       };
 
-      const foundReportRef = await addDoc(
-        collection(db, 'reports'),
-        foundReportData
-      );
-
-      let matchCount = 0;
+      const docRef = await addDoc(collection(db, 'reports'), newReportData);
 
       if (isLinkedToLost && selectedLostReport) {
-        await createMatchRecord(selectedLostReport, foundReportRef.id);
-        matchCount = 1;
+        await createMatchRecord(selectedLostReport, docRef.id);
       } else {
-        const suggestedMatches = await findMatchesForFoundReport(
-          foundReportData,
-          3
-        );
-
-        for (const candidate of suggestedMatches) {
-          await createMatchRecord(candidate, foundReportRef.id);
-        }
-        matchCount = suggestedMatches.length;
+        await findMatchesForFoundReport({ id: docRef.id, ...newReportData });
       }
 
-      if (matchCount > 0) {
-        Alert.alert(
-          'Success',
-          `Your found item report has been submitted. ${matchCount} possible match(es) found!`
-        );
-      } else {
-        Alert.alert(
-          'Success',
-          'Your found item report has been submitted. No matching lost reports found yet.'
-        );
-      }
-
+      Alert.alert('Success', 'Your found item report has been published to the community.');
       navigation.goBack();
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -218,55 +201,102 @@ export default function ReportFoundScreen({ navigation }) {
     }
   }
 
+  const styles = getStyles(colors, isDark);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Report a Found Item</Text>
+      <Text style={styles.sub}>Help locate and return discovered items to their rightful owners</Text>
 
-      <Text style={styles.label}>Description / Notes</Text>
+      {/* Category selection */}
+      <Text style={styles.label}>Item Category</Text>
+      <View style={styles.categoryRow}>
+        {CATEGORIES.map((cat) => {
+          const isSelected = category === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.categoryChip, isSelected && styles.categoryChipSelected]}
+              onPress={() => setCategory(cat)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.categoryText, isSelected && styles.categoryTextSelected]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Description */}
+      <Text style={styles.label}>Description</Text>
       <TextInput
         style={styles.textArea}
-        placeholder="Describe what you found, where, and when..."
-        value={description}
-        onChangeText={setDescription}
+        placeholder="Color, brand, where found, condition..."
+        placeholderTextColor={colors.textMuted}
         multiline
         numberOfLines={4}
+        value={description}
+        onChangeText={setDescription}
       />
 
-      <Text style={styles.label}>Photo (optional)</Text>
-      <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
+      {/* Photo Picker */}
+      <Text style={styles.label}>Photo (Optional)</Text>
+      <TouchableOpacity style={styles.photoBox} onPress={pickImage} activeOpacity={0.8}>
         {photoUri ? (
           <Image source={{ uri: photoUri }} style={styles.photoPreview} />
         ) : (
-          <Text style={styles.photoBoxText}>+ Add Photo</Text>
+          <View style={styles.photoPlaceholder}>
+            <Ionicons name="camera-outline" size={32} color={colors.darkGreenMid} />
+            <Text style={styles.photoBoxText}>Tap to upload a photo</Text>
+          </View>
         )}
       </TouchableOpacity>
 
-      <Text style={styles.label}>Location</Text>
-      <TouchableOpacity style={styles.locationBox} onPress={getCurrentLocation}>
-        <Text style={styles.locationBoxText}>
-          {gettingLocation
-            ? 'Getting location...'
-            : location
-            ? `📍 ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
-            : '📍 Tap to set location'}
-        </Text>
+      {/* Location */}
+      <Text style={styles.label}>Found Location</Text>
+      <TouchableOpacity
+        style={styles.locationBox}
+        onPress={getCurrentLocation}
+        disabled={gettingLocation}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="navigate-circle-outline"
+          size={24}
+          color={location ? colors.safeGreen : colors.darkGreenMid}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.locationBoxTitle}>
+            {gettingLocation
+              ? 'Acquiring GPS location...'
+              : location
+              ? 'Location Tagged Successfully'
+              : 'Tag Found Location'}
+          </Text>
+          <Text style={styles.locationBoxSubtitle}>
+            {location
+              ? `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`
+              : 'Tap to attach GPS coordinates where item was discovered'}
+          </Text>
+        </View>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.linkToggle} onPress={toggleLinkToLost}>
+      {/* Link to existing lost report toggle */}
+      <TouchableOpacity style={styles.linkToggle} onPress={toggleLinkToLost} activeOpacity={0.8}>
         <View style={[styles.checkbox, isLinkedToLost && styles.checkboxChecked]}>
-          {isLinkedToLost && <Text style={styles.checkmark}>✓</Text>}
+          {isLinkedToLost && <Ionicons name="checkmark" size={14} color="#FFF" />}
         </View>
-        <Text style={styles.linkToggleText}>
-          This matches an existing lost item report
-        </Text>
+        <Text style={styles.linkToggleText}>I am responding to an existing lost item report</Text>
       </TouchableOpacity>
 
       {isLinkedToLost && (
         <View style={styles.reportsListContainer}>
+          <Text style={styles.label}>Select Matching Lost Report:</Text>
           {loadingReports ? (
-            <ActivityIndicator color="#2E7D32" style={{ marginVertical: 10 }} />
+            <ActivityIndicator color={colors.darkGreenMid} style={{ marginVertical: 10 }} />
           ) : lostReports.length === 0 ? (
-            <Text style={styles.noReportsText}>No open lost reports found.</Text>
+            <Text style={styles.noReportsText}>No active lost reports found.</Text>
           ) : (
             lostReports.map((report) => (
               <TouchableOpacity
@@ -276,8 +306,14 @@ export default function ReportFoundScreen({ navigation }) {
                   selectedLostReport?.id === report.id && styles.reportItemSelected,
                 ]}
                 onPress={() => setSelectedLostReport(report)}
+                activeOpacity={0.75}
               >
-                <Text style={styles.reportItemCategory}>{report.category}</Text>
+                <View style={styles.reportItemHeader}>
+                  <Text style={styles.reportItemCategory}>{report.category || 'Item'}</Text>
+                  {selectedLostReport?.id === report.id && (
+                    <Ionicons name="checkmark-circle" size={16} color={colors.safeGreen} />
+                  )}
+                </View>
                 <Text style={styles.reportItemDescription} numberOfLines={2}>
                   {report.description}
                 </Text>
@@ -287,94 +323,145 @@ export default function ReportFoundScreen({ navigation }) {
         </View>
       )}
 
+      {/* Submit Button */}
       <TouchableOpacity
         style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
         onPress={handleSubmit}
         disabled={submitting}
+        activeOpacity={0.85}
       >
         {submitting ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color="#FFF" />
         ) : (
-          <Text style={styles.submitButtonText}>Submit Found Report</Text>
+          <Text style={styles.submitButtonText}>Publish Found Report</Text>
         )}
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20, paddingBottom: 40 },
-  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20, color: '#2E7D32' },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginTop: 16, marginBottom: 8 },
-  textArea: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 14,
-    textAlignVertical: 'top',
-    minHeight: 100,
-  },
-  photoBox: {
-    height: 150,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    overflow: 'hidden',
-  },
-  photoBoxText: { color: '#999', fontSize: 15 },
-  photoPreview: { width: '100%', height: '100%', borderRadius: 12 },
-  locationBox: {
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    backgroundColor: '#f9f9f9',
-  },
-  locationBoxText: { color: '#666', fontSize: 14 },
-  linkToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderWidth: 2,
-    borderColor: '#2E7D32',
-    borderRadius: 5,
-    marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: { backgroundColor: '#2E7D32' },
-  checkmark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  linkToggleText: { fontSize: 14, color: '#333', flex: 1 },
-  reportsListContainer: { marginTop: 10 },
-  noReportsText: { color: '#999', fontSize: 13, fontStyle: 'italic' },
-  reportItem: {
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    marginBottom: 8,
-    backgroundColor: '#f9f9f9',
-  },
-  reportItemSelected: { borderColor: '#2E7D32', backgroundColor: '#E8F5E9' },
-  reportItemCategory: { fontWeight: '600', color: '#333', marginBottom: 4 },
-  reportItemDescription: { color: '#666', fontSize: 13 },
-  submitButton: {
-    backgroundColor: '#2E7D32',
-    borderRadius: 10,
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 30,
-  },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-});
+const getStyles = (colors, isDark) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: 18, paddingBottom: 40 },
+    title: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
+    sub: { fontSize: 13, color: colors.textSecondary, marginBottom: 20 },
+    label: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginTop: 14, marginBottom: 8 },
+    categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    categoryChip: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      marginBottom: 6,
+    },
+    categoryChipSelected: {
+      backgroundColor: isDark ? colors.darkGreenSurface : '#E0F2F1',
+      borderColor: colors.darkGreenMid,
+    },
+    categoryText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
+    categoryTextSelected: { color: colors.darkGreenMid, fontWeight: '700' },
+    textArea: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS.lg,
+      padding: 14,
+      fontSize: 14,
+      color: colors.textPrimary,
+      backgroundColor: colors.surface,
+      textAlignVertical: 'top',
+      minHeight: 100,
+    },
+    photoBox: {
+      height: 140,
+      borderWidth: 2,
+      borderColor: colors.border,
+      borderStyle: 'dashed',
+      borderRadius: RADIUS.xl,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      overflow: 'hidden',
+    },
+    photoPlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    photoBoxText: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
+    photoPreview: { width: '100%', height: '100%' },
+    locationBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS.lg,
+      backgroundColor: colors.surface,
+      gap: 12,
+      ...SHADOWS.small,
+    },
+    locationBoxTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    locationBoxSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    linkToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 20,
+      padding: 4,
+    },
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderWidth: 2,
+      borderColor: colors.darkGreenMid,
+      borderRadius: 6,
+      marginRight: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+    },
+    checkboxChecked: { backgroundColor: colors.darkGreenMid },
+    linkToggleText: { fontSize: 13, color: colors.textPrimary, flex: 1, fontWeight: '500' },
+    reportsListContainer: { marginTop: 10 },
+    noReportsText: { color: colors.textMuted, fontSize: 13, fontStyle: 'italic' },
+    reportItem: {
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS.lg,
+      marginBottom: 8,
+      backgroundColor: colors.surface,
+    },
+    reportItemSelected: {
+      borderColor: colors.darkGreenMid,
+      backgroundColor: isDark ? colors.darkGreenSurface : '#E8F5E9',
+    },
+    reportItemHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    reportItemCategory: { fontWeight: '700', color: colors.textPrimary, fontSize: 13 },
+    reportItemDescription: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
+    submitButton: {
+      backgroundColor: colors.darkGreenMid,
+      borderRadius: RADIUS.lg,
+      paddingVertical: 15,
+      alignItems: 'center',
+      marginTop: 26,
+      ...SHADOWS.medium,
+    },
+    submitButtonDisabled: { opacity: 0.6 },
+    submitButtonText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  });

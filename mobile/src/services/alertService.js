@@ -5,7 +5,6 @@ import {
   getDoc,
   query,
   where,
-  orderBy,
   limit,
   updateDoc,
   onSnapshot,
@@ -23,26 +22,50 @@ export async function getAlertHistory(userId) {
   const localList = await getLocalAlerts();
 
   try {
+    // Query by userId without requiring a composite index in Firestore
+    // Client-side sorting avoids FirebaseError: The query requires an index
     const q = query(
       collection(db, 'Alerts'),
       where('userId', '==', userId),
-      orderBy('timestamp', 'desc'),
-      limit(20)
+      limit(50)
     );
     const snap = await getDocs(q);
     if (!snap.empty) {
-      const serverAlerts = snap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        timestamp: d.data().timestamp?.toDate?.()?.toISOString() || d.data().timestamp,
-      }));
-      return serverAlerts;
+      const serverAlerts = snap.docs.map((d) => {
+        const data = d.data();
+        let timestampIso = data.timestamp;
+        let timeMillis = 0;
+
+        if (data.timestamp?.toDate) {
+          const date = data.timestamp.toDate();
+          timestampIso = date.toISOString();
+          timeMillis = date.getTime();
+        } else if (data.timestamp) {
+          const date = new Date(data.timestamp);
+          timestampIso = isNaN(date.getTime()) ? data.timestamp : date.toISOString();
+          timeMillis = isNaN(date.getTime()) ? 0 : date.getTime();
+        }
+
+        return {
+          id: d.id,
+          ...data,
+          timestamp: timestampIso,
+          _sortTime: timeMillis,
+        };
+      });
+
+      // Sort client-side descending (newest alerts first)
+      serverAlerts.sort((a, b) => b._sortTime - a._sortTime);
+
+      return serverAlerts.slice(0, 20).map(({ _sortTime, ...alert }) => alert);
     }
   } catch (err) {
     console.warn('[alertService] getAlertHistory Firestore query error, returning local cache:', err);
   }
 
-  return localList.filter((a) => a.userId === userId);
+  return localList
+    .filter((a) => a.userId === userId)
+    .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
 }
 
 /**

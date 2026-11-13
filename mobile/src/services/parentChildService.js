@@ -1181,7 +1181,7 @@ export async function triggerChildSOS(childId, triggerSource = 'button') {
 
   if (!USE_MOCK_DATA) {
     try {
-      await setDoc(doc(db, 'alerts', `child_sos_${Date.now()}`), {
+      await setDoc(doc(db, 'Alerts', `child_sos_${Date.now()}`), {
         type: 'sos',
         triggeredBy: child.targetUid || child.id,
         triggerSource,

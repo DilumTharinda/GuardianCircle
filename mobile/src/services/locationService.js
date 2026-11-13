@@ -40,7 +40,7 @@ export async function getForegroundLocationSnapshot() {
           const error = new Error('Location request timed out.');
           error.code = 'LOCATION_TIMEOUT';
           reject(error);
-        }, 15000);
+        }, 30000);
       }),
     ]);
 
