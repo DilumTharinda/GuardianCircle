@@ -18,11 +18,30 @@ export function navigate(name, params) {
 
   const TAB_ROUTES = [ROUTES.HOME, ROUTES.SAFETY, ROUTES.MAP, ROUTES.CIRCLE_FIND, ROUTES.PROFILE];
 
+  // CircleFind sub-screens nested inside the CircleFind tab navigator
+  const CIRCLE_FIND_SUB_ROUTES = [
+    ROUTES.CIRCLE_FIND_DETAIL,
+    ROUTES.CIRCLE_FIND_REPORT,
+    ROUTES.MATCH_CHAT,
+    'CircleFindDetail',
+    'CircleFindReport',
+    'MatchChat',
+  ];
+
   if (TAB_ROUTES.includes(name)) {
     // Navigate into MainTabNavigator
     navigationRef.navigate('Main', {
       screen: name,
       params,
+    });
+  } else if (CIRCLE_FIND_SUB_ROUTES.includes(name)) {
+    // Navigate into Main -> CircleFind Tab -> Sub-screen
+    navigationRef.navigate('Main', {
+      screen: ROUTES.CIRCLE_FIND,
+      params: {
+        screen: name,
+        params,
+      },
     });
   } else {
     navigationRef.navigate(name, params);

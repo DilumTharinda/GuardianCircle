@@ -1,6 +1,7 @@
 import { collection, doc, GeoPoint, runTransaction, serverTimestamp } from 'firebase/firestore';
 import ngeohash from 'ngeohash';
 import { auth, db } from './firebase';
+import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 
 export const UNSAFE_REPORTS_COLLECTION = 'reports';
 export const UNSAFE_REPORT_TYPE = 'unsafe_location';
@@ -113,6 +114,22 @@ export async function createUnsafeLocationReport(uid, input = {}) {
     });
   });
   assertCurrentUser(uid);
+
+  // Audit log unsafe zone report
+  logActivity({
+    action: AUDIT_ACTIONS.UNSAFE_ZONE_REPORT,
+    performedBy: uid,
+    targetUid: ref.id,
+    note: `Unsafe area reported: ${category}`,
+    metadata: {
+      reportId: ref.id,
+      category,
+      description,
+      location,
+      geohash,
+    },
+  }).catch(() => {});
+
   return { id: ref.id, category, description, location };
 }
 

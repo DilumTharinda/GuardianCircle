@@ -30,7 +30,7 @@ import { TRIGGER_TYPES } from '../../constants/alertTriggers';
 import { useTheme } from '../../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
 
@@ -197,15 +197,20 @@ export default function SafetyScreen() {
       {activeAlert ? (
         <View style={styles.activeEmergencyBanner}>
           <View style={styles.activeHeaderRow}>
-            <Text style={styles.activeBlinkDot}>🔴</Text>
+            <View style={styles.activePulseIcon}>
+              <MaterialIcons name="emergency" size={18} color="#D32F2F" />
+            </View>
             <Text style={styles.activeAlertTitle}>EMERGENCY SOS ACTIVE</Text>
           </View>
           <Text style={styles.activeAlertText}>
             Trigger: {activeAlert.triggerType?.toUpperCase() || 'IN-APP'}
           </Text>
-          <Text style={styles.activeAlertCoords}>
-            📍 {activeAlert.location?.address || `${activeAlert.location?.lat?.toFixed?.(4)}, ${activeAlert.location?.lng?.toFixed?.(4)}`}
-          </Text>
+          <View style={styles.locRow}>
+            <MaterialIcons name="place" size={16} color={colors.dangerRed || '#D32F2F'} />
+            <Text style={styles.activeAlertCoords}>
+              {activeAlert.location?.address || `${activeAlert.location?.lat?.toFixed?.(4)}, ${activeAlert.location?.lng?.toFixed?.(4)}`}
+            </Text>
+          </View>
           <Text style={styles.activeAlertRecipients}>
             Recipients notified: Trusted Circle & linked guardians.
           </Text>
@@ -215,12 +220,15 @@ export default function SafetyScreen() {
             onPress={handleResolveAlert}
             activeOpacity={0.85}
           >
-            <Text style={styles.resolveBtnText}>✓ I AM SAFE (RESOLVE SOS)</Text>
+            <MaterialIcons name="check-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
+            <Text style={styles.resolveBtnText}>I AM SAFE (RESOLVE SOS)</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.statusCard}>
-          <Text style={styles.statusDot}>🟢</Text>
+          <View style={styles.shieldBadge}>
+            <MaterialIcons name="verified-user" size={24} color={colors.darkGreenMid || '#06756A'} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.statusTitle}>Protection Shield Active</Text>
             <Text style={styles.statusSubtitle}>
@@ -245,91 +253,69 @@ export default function SafetyScreen() {
         />
 
         <View style={styles.triggerBadgeRow}>
-          <Text style={styles.triggerBadge}>⚡ Instant Dispatch</Text>
-          <Text style={styles.triggerBadge}>🛰️ GPS & Reverse Geocoding</Text>
+          <View style={styles.triggerBadge}>
+            <MaterialIcons name="flash-on" size={14} color="#E65100" />
+            <Text style={styles.triggerBadgeText}>Instant Dispatch</Text>
+          </View>
+          <View style={styles.triggerBadge}>
+            <MaterialIcons name="my-location" size={14} color="#1565C0" />
+            <Text style={styles.triggerBadgeText}>Live GPS Geocoding</Text>
+          </View>
         </View>
       </View>
 
-      {/* 3. Emergency Trigger Methods */}
+      {/* 3. Emergency Trigger Controls */}
       <Text style={styles.sectionHeader}>Emergency Trigger Controls</Text>
 
       {/* Shake to SOS */}
       <View style={styles.triggerRow}>
+        <View style={styles.triggerIconContainer}>
+          <MaterialIcons name="vibration" size={22} color={colors.darkGreenMid || '#06756A'} />
+        </View>
         <View style={styles.triggerInfo}>
-          <Text style={styles.triggerName}>📳 Shake-to-SOS</Text>
+          <Text style={styles.triggerName}>Shake-to-SOS</Text>
           <Text style={styles.triggerDesc}>Vigorously shake phone to trigger 5s countdown</Text>
         </View>
         <Switch
           value={shakeEnabled}
           onValueChange={setShakeEnabled}
-          trackColor={{ false: '#CCC', true: '#EF5350' }}
-          thumbColor={shakeEnabled ? '#D32F2F' : '#F4F3F4'}
+          trackColor={{ false: '#CCC', true: colors.primary || '#EF5350' }}
+          thumbColor={shakeEnabled ? (colors.primaryDark || '#D32F2F') : '#F4F3F4'}
         />
       </View>
 
       {/* Fall / Sudden Stop Detection */}
       <View style={styles.triggerRow}>
+        <View style={styles.triggerIconContainer}>
+          <MaterialCommunityIcons name="car-brake-alert" size={22} color={colors.warnOrange || '#FB8C00'} />
+        </View>
         <View style={styles.triggerInfo}>
-          <Text style={styles.triggerName}>⚠️ Fall & Sudden Stop</Text>
+          <Text style={styles.triggerName}>Fall & Sudden Stop</Text>
           <Text style={styles.triggerDesc}>Motion sensor detects abrupt impact with prompt</Text>
         </View>
         <Switch
           value={fallDetectionEnabled}
           onValueChange={setFallDetectionEnabled}
-          trackColor={{ false: '#CCC', true: '#EF5350' }}
-          thumbColor={fallDetectionEnabled ? '#D32F2F' : '#F4F3F4'}
+          trackColor={{ false: '#CCC', true: colors.primary || '#EF5350' }}
+          thumbColor={fallDetectionEnabled ? (colors.primaryDark || '#D32F2F') : '#F4F3F4'}
         />
       </View>
 
       {/* Triple Volume Button Trigger */}
       <View style={styles.triggerRow}>
+        <View style={styles.triggerIconContainer}>
+          <MaterialIcons name="volume-up" size={22} color={colors.infoBlue || '#1976D2'} />
+        </View>
         <View style={styles.triggerInfo}>
-          <Text style={styles.triggerName}>🔘 Triple Volume Press</Text>
+          <Text style={styles.triggerName}>Triple Volume Press</Text>
           <Text style={styles.triggerDesc}>3 quick volume presses trigger 5s countdown</Text>
         </View>
         <Switch
           value={volumeButtonEnabled}
           onValueChange={setVolumeButtonEnabled}
-          trackColor={{ false: '#CCC', true: '#EF5350' }}
-          thumbColor={volumeButtonEnabled ? '#D32F2F' : '#F4F3F4'}
+          trackColor={{ false: '#CCC', true: colors.primary || '#EF5350' }}
+          thumbColor={volumeButtonEnabled ? (colors.primaryDark || '#D32F2F') : '#F4F3F4'}
         />
-      </View>
-
-      {/* Simulation & QA Test Tools */}
-      <View style={styles.simulationCard}>
-        <Text style={styles.simulationTitle}>🧪 Sensor Testing & QA Simulations</Text>
-        <Text style={styles.simulationNote}>
-          Test emergency triggers directly without physical strain:
-        </Text>
-        <View style={styles.simButtonsGrid}>
-          <TouchableOpacity
-            style={styles.simBtn}
-            onPress={simulateTriplePress}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.simBtnText}>🔘 Test 3x Volume</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.simBtn}
-            onPress={simulateFall}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.simBtnText}>⚠️ Test Fall Modal</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.simBtn}
-            onPress={async () => {
-              const id = await triggerWidgetSOS();
-              loadHistory();
-              Alert.alert('Widget Triggered', `Dispatched widget emergency with ID: ${id}`);
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.simBtnText}>📱 Test Widget SOS</Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* 4. Emergency Speed Dialers */}
@@ -340,7 +326,9 @@ export default function SafetyScreen() {
           onPress={() => dialEmergency('119', 'Police Emergency')}
           activeOpacity={0.75}
         >
-          <Text style={styles.dialEmoji}>🚓</Text>
+          <View style={[styles.dialIconCircle, { backgroundColor: '#E3F2FD' }]}>
+            <MaterialIcons name="local-police" size={24} color="#1976D2" />
+          </View>
           <Text style={styles.dialName}>Police</Text>
           <Text style={styles.dialNumber}>119</Text>
         </TouchableOpacity>
@@ -350,9 +338,11 @@ export default function SafetyScreen() {
           onPress={() => dialEmergency('1990', 'Suwa Seriya Ambulance')}
           activeOpacity={0.75}
         >
-          <Text style={styles.dialEmoji}>🚑</Text>
+          <View style={[styles.dialIconCircle, { backgroundColor: '#FFEBEE' }]}>
+            <MaterialIcons name="medical-services" size={24} color="#E53935" />
+          </View>
           <Text style={styles.dialName}>Ambulance</Text>
-          <Text style={styles.dialNumber}>1990</Text>
+          <Text style={[styles.dialNumber, { color: '#E53935' }]}>1990</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -360,9 +350,11 @@ export default function SafetyScreen() {
           onPress={() => dialEmergency('110', 'Fire & Rescue')}
           activeOpacity={0.75}
         >
-          <Text style={styles.dialEmoji}>🚒</Text>
+          <View style={[styles.dialIconCircle, { backgroundColor: '#FFF3E0' }]}>
+            <MaterialIcons name="fire-extinguisher" size={24} color="#FB8C00" />
+          </View>
           <Text style={styles.dialName}>Fire & Rescue</Text>
-          <Text style={styles.dialNumber}>110</Text>
+          <Text style={[styles.dialNumber, { color: '#FB8C00' }]}>110</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -370,9 +362,11 @@ export default function SafetyScreen() {
           onPress={() => dialEmergency('0112903903', 'Campus Security')}
           activeOpacity={0.75}
         >
-          <Text style={styles.dialEmoji}>🏫</Text>
+          <View style={[styles.dialIconCircle, { backgroundColor: '#E8F5E9' }]}>
+            <MaterialIcons name="security" size={24} color="#43A047" />
+          </View>
           <Text style={styles.dialName}>Campus Sec</Text>
-          <Text style={styles.dialNumber}>011-2903903</Text>
+          <Text style={[styles.dialNumber, { color: '#43A047' }]}>011-2903903</Text>
         </TouchableOpacity>
       </View>
 
@@ -380,15 +374,19 @@ export default function SafetyScreen() {
       <Text style={styles.sectionHeader}>Recent Emergency Alerts</Text>
       {alertHistory.length === 0 ? (
         <View style={styles.emptyHistoryCard}>
+          <MaterialIcons name="health-and-safety" size={28} color={colors.textSecondary || '#90A4AE'} style={{ marginBottom: 4 }} />
           <Text style={styles.emptyHistoryText}>No emergency alerts on record. Stay safe!</Text>
         </View>
       ) : (
         alertHistory.slice(0, 5).map((item) => (
           <View key={item.id} style={styles.historyCard}>
             <View style={styles.historyTop}>
-              <Text style={styles.historyType}>
-                {item.triggerType?.toUpperCase() || 'EMERGENCY'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="notifications-active" size={16} color={colors.darkGreenMid || '#06756A'} />
+                <Text style={styles.historyType}>
+                  {item.triggerType?.toUpperCase() || 'EMERGENCY'}
+                </Text>
+              </View>
               <Text
                 style={[
                   styles.historyStatus,
@@ -402,9 +400,12 @@ export default function SafetyScreen() {
                 {item.status?.toUpperCase() || 'DISPATCHED'}
               </Text>
             </View>
-            <Text style={styles.historyLocation}>
-              📍 {item.location?.address || `${item.location?.lat?.toFixed?.(3)}, ${item.location?.lng?.toFixed?.(3)}`}
-            </Text>
+            <View style={styles.historyLocRow}>
+              <MaterialIcons name="place" size={14} color={colors.textSecondary || '#546E7A'} />
+              <Text style={styles.historyLocation}>
+                {item.location?.address || `${item.location?.lat?.toFixed?.(3)}, ${item.location?.lng?.toFixed?.(3)}`}
+              </Text>
+            </View>
             <Text style={styles.historyTime}>
               {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
             </Text>
@@ -457,21 +458,34 @@ const getStyles = (colors, isDark, insets) =>
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    padding: 14,
-    borderRadius: 12,
+    backgroundColor: isDark ? (colors.surface || '#1A2420') : '#E8F5E9',
+    padding: 16,
+    borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#C8E6C9',
+    borderColor: isDark ? (colors.border || 'rgba(255,255,255,0.08)') : '#C8E6C9',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.3 : 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: 12,
   },
-  statusDot: { fontSize: 20, marginRight: 10 },
-  statusTitle: { fontSize: 14, fontWeight: '700', color: '#2E7D32' },
-  statusSubtitle: { fontSize: 12, color: '#4CAF50', marginTop: 1 },
+  shieldBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: isDark ? 'rgba(6, 117, 106, 0.25)' : '#C8E6C9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusTitle: { fontSize: 15, fontWeight: '700', color: colors.darkGreenMid || '#2E7D32' },
+  statusSubtitle: { fontSize: 12, color: isDark ? colors.textSecondary : '#4CAF50', marginTop: 2 },
 
   activeEmergencyBanner: {
-    backgroundColor: '#FFEBEE',
+    backgroundColor: isDark ? 'rgba(211, 47, 47, 0.15)' : '#FFEBEE',
     borderWidth: 2,
-    borderColor: '#E53935',
+    borderColor: colors.dangerRed || '#E53935',
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
@@ -480,42 +494,65 @@ const getStyles = (colors, isDark, insets) =>
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
+    gap: 6,
   },
-  activeBlinkDot: { fontSize: 16, marginRight: 6 },
-  activeAlertTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#D32F2F',
-    letterSpacing: 1,
-  },
-  activeAlertText: { fontSize: 13, fontWeight: '700', color: '#333', marginTop: 2 },
-  activeAlertCoords: { fontSize: 13, color: '#555', marginTop: 4 },
-  activeAlertRecipients: { fontSize: 12, color: '#777', marginTop: 4, fontStyle: 'italic' },
-  resolveBtn: {
-    backgroundColor: '#2E7D32',
-    marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
+  activePulseIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFCDD2',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  resolveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+  activeAlertTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: colors.dangerRed || '#D32F2F',
+    letterSpacing: 0.8,
+  },
+  activeAlertText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary || '#333', marginTop: 2 },
+  locRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  activeAlertCoords: { fontSize: 13, color: colors.textSecondary || '#555', flex: 1 },
+  activeAlertRecipients: { fontSize: 12, color: colors.textSecondary || '#777', marginTop: 6, fontStyle: 'italic' },
+  resolveBtn: {
+    backgroundColor: colors.darkGreenMid || '#2E7D32',
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resolveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13, letterSpacing: 0.5 },
 
   sosCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
     marginBottom: 20,
+    borderWidth: isDark ? 1 : 0,
+    borderColor: colors.border || 'transparent',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: isDark ? 0.35 : 0.08,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  sosHeading: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A' },
+  sosHeading: { fontSize: 18, fontWeight: 'bold', color: colors.textPrimary || '#1A1A1A' },
   sosSubheading: {
     fontSize: 12,
-    color: '#757575',
+    color: colors.textSecondary || '#757575',
     textAlign: 'center',
     marginHorizontal: 12,
     marginTop: 4,
@@ -527,19 +564,24 @@ const getStyles = (colors, isDark, insets) =>
     marginTop: 8,
   },
   triggerBadge: {
-    backgroundColor: '#F1F3F4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F3F4',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
+  },
+  triggerBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#424242',
+    color: colors.textPrimary || '#424242',
   },
 
   sectionHeader: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#37474F',
+    color: colors.textPrimary || '#37474F',
     marginTop: 8,
     marginBottom: 10,
   },
@@ -547,44 +589,30 @@ const getStyles = (colors, isDark, insets) =>
   triggerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface || '#FFFFFF',
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 10,
+    borderWidth: isDark ? 1 : 0,
+    borderColor: colors.border || 'transparent',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOpacity: isDark ? 0.2 : 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  triggerIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F6F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
   triggerInfo: { flex: 1, marginRight: 12 },
-  triggerName: { fontSize: 14, fontWeight: '700', color: '#263238' },
-  triggerDesc: { fontSize: 12, color: '#78909C', marginTop: 2 },
-
-  simulationCard: {
-    backgroundColor: '#ECEFF1',
-    borderRadius: 12,
-    padding: 14,
-    marginVertical: 10,
-  },
-  simulationTitle: { fontSize: 13, fontWeight: '700', color: '#455A64' },
-  simulationNote: { fontSize: 11, color: '#607D8B', marginVertical: 4 },
-  simButtonsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 6,
-  },
-  simBtn: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CFD8DC',
-  },
-  simBtnText: { fontSize: 12, fontWeight: '600', color: '#37474F' },
+  triggerName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary || '#263238' },
+  triggerDesc: { fontSize: 12, color: colors.textSecondary || '#78909C', marginTop: 2 },
 
   speedDialGrid: {
     flexDirection: 'row',
@@ -594,37 +622,51 @@ const getStyles = (colors, isDark, insets) =>
   },
   dialCard: {
     width: '48%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 14,
     padding: 12,
     borderLeftWidth: 4,
+    borderWidth: isDark ? 1 : 0,
+    borderColor: colors.border || 'transparent',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: isDark ? 0.2 : 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
-  dialEmoji: { fontSize: 22, marginBottom: 2 },
-  dialName: { fontSize: 12, fontWeight: '700', color: '#263238' },
-  dialNumber: { fontSize: 14, fontWeight: '900', color: '#1E88E5', marginTop: 2 },
+  dialIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  dialName: { fontSize: 13, fontWeight: '700', color: colors.textPrimary || '#263238' },
+  dialNumber: { fontSize: 15, fontWeight: '900', color: '#1E88E5', marginTop: 2 },
 
   emptyHistoryCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: colors.surface || '#FFFFFF',
+    padding: 20,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: isDark ? 1 : 0,
+    borderColor: colors.border || 'transparent',
   },
-  emptyHistoryText: { fontSize: 12, color: '#90A4AE', fontStyle: 'italic' },
+  emptyHistoryText: { fontSize: 12, color: colors.textSecondary || '#90A4AE', fontStyle: 'italic' },
 
   historyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: colors.surface || '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: isDark ? 1 : 0,
+    borderColor: colors.border || 'transparent',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
+    shadowOpacity: isDark ? 0.15 : 0.03,
+    shadowRadius: 3,
     elevation: 1,
   },
   historyTop: {
@@ -632,11 +674,17 @@ const getStyles = (colors, isDark, insets) =>
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  historyType: { fontSize: 12, fontWeight: '800', color: '#37474F' },
-  historyStatus: { fontSize: 10, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  historyType: { fontSize: 12, fontWeight: '800', color: colors.textPrimary || '#37474F' },
+  historyStatus: { fontSize: 10, fontWeight: '800', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
   statusActive: { backgroundColor: '#FFEBEE', color: '#D32F2F' },
   statusResolved: { backgroundColor: '#E8F5E9', color: '#2E7D32' },
   statusCancelled: { backgroundColor: '#ECEFF1', color: '#78909C' },
-  historyLocation: { fontSize: 12, color: '#546E7A', marginTop: 4 },
-  historyTime: { fontSize: 10, color: '#90A4AE', marginTop: 2 },
+  historyLocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  historyLocation: { fontSize: 12, color: colors.textSecondary || '#546E7A', flex: 1 },
+  historyTime: { fontSize: 10, color: colors.textSecondary || '#90A4AE', marginTop: 4 },
 });

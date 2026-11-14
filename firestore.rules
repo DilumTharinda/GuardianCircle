@@ -1,0 +1,268 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ───────────────────────────────────────────────
+
+    // Is the request from a logged-in user?
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Is the requesting user the owner of this document?
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // Get the role of the currently authenticated user.
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Is the current user an Admin/Moderator?
+    function isAdmin() {
+      return isAuthenticated() && getRole() == 'admin_moderator';
+    }
+
+    // Is the current user a Parent/Guardian?
+    function isParent() {
+      return isAuthenticated() && getRole() == 'parent_guardian';
+    }
+
+    // Does a parent↔child link exist between the current user and the given child uid?
+    function isLinkedParent(childUid) {
+      return isAuthenticated() && exists(
+        /databases/$(database)/documents/linkedEntities/$(request.auth.uid + '_' + childUid)
+      );
+    }
+
+    // Is the role being written the admin role? (Block client attempts)
+    function isAttemptingAdminRole() {
+      return request.resource.data.role == 'admin_moderator';
+    }
+
+    // Check if the current user is in the alert recipients list (handles both recipientIds and recipients)
+    function isAlertRecipient(data) {
+      return ('recipientIds' in data && request.auth.uid in data.recipientIds)
+          || ('recipients' in data && request.auth.uid in data.recipients);
+    }
+
+    // ─── Users Collection ────────────────────────────────────────────────
+    match /users/{uid} {
+      // Allow any authenticated user to read user profiles (so real account names can be displayed on posts)
+      allow read: if isAuthenticated();
+
+      // A user can create their own profile during registration,
+      // BUT they cannot set themselves as Admin
+      allow create: if isAuthenticated()
+                    && isOwner(uid)
+                    && !isAttemptingAdminRole();
+
+      // A user can update their own profile, INCLUDING their role, 
+      // but they cannot promote themselves to Admin.
+      // Also allows other authenticated users to award karma (karmaScore only).
+      allow update: if isAuthenticated() && (
+        (isOwner(uid) && !isAttemptingAdminRole()) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['karmaScore'])
+      );
+
+      // Allow users to delete their own profile
+      allow delete: if isAuthenticated() && isOwner(uid);
+
+      // ─── Personal Notifications Subcollection ──────────────────────────
+      // Subcollection for user's personal notifications (users/{uid}/notifications/{id})
+      match /notifications/{notificationId} {
+        // User can read, update (e.g. mark read), and delete their own notifications
+        allow read, update, delete: if isAuthenticated() && isOwner(uid);
+
+        // Any authenticated user can create/dispatch a personal notification (e.g., when boosting, updating status, or finding an item)
+        allow create: if isAuthenticated();
+      }
+    }
+
+    // ─── Usernames Collection (Unique Handle Claim & Validation) ─────────
+    match /usernames/{username} {
+      // Authenticated users can check availability
+      allow read: if isAuthenticated();
+
+      // A user can claim their unique username
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+
+      // A user can transfer or update their own username mapping
+      allow update: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+
+      // A user can delete/release their previous username mapping
+      allow delete: if isAuthenticated()
+                    && resource.data.uid == request.auth.uid;
+    }
+
+    // ─── Broadcast Notifications Collection ──────────────────────────────
+    // Community-wide, role-targeted, and emergency announcements
+    match /broadcastNotifications/{notificationId} {
+      // Any authenticated user can read broadcast notifications
+      allow read: if isAuthenticated();
+
+      // Authenticated users can dispatch broadcast alerts (e.g. SOS broadcast, urgent community item alert)
+      allow create: if isAuthenticated();
+
+      // Only Admins / Moderators can update or delete broadcast notifications
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── LinkedEntities Collection (Lowercase) ───────────────────────────
+    // Stores parent↔child, owner↔pet, and relationship links
+    match /linkedEntities/{entityId} {
+      // Allow reading and writing links owned by or associated with the user
+      allow read, write: if isAuthenticated()
+                          && (resource == null || resource.data.ownerUid == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.targetUserId == request.auth.uid);
+
+      // Admin can read all linked entities
+      allow read: if isAdmin();
+    }
+
+    // ─── LinkedEntities Collection (Capitalized Alias) ───────────────────
+    // Matches client queries targeting collection(db, 'LinkedEntities')
+    match /LinkedEntities/{entityId} {
+      allow read, write: if isAuthenticated()
+                          && (resource == null || resource.data.ownerUid == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.targetUserId == request.auth.uid);
+
+      allow read: if isAdmin();
+    }
+
+    // ─── Journeys Collection ─────────────────────────────────────────────
+    match /journeys/{journeyId} {
+      // The journey owner can read/write their own journey
+      allow read, write: if isAuthenticated()
+                          && (resource == null || resource.data.ownerUid == request.auth.uid);
+
+      // Contacts can read a journey IF they are in the sharedWith list
+      allow read: if isAuthenticated()
+                  && ('sharedWith' in resource.data && request.auth.uid in resource.data.sharedWith);
+
+      // A linked parent can read their child's journeys
+      allow read: if isLinkedParent(resource.data.ownerUid);
+    }
+
+    // ─── Alerts Collection (Capitalized - Primary) ────────────────────────
+    match /Alerts/{alertId} {
+      // Alert creator can read and update their own alerts
+      allow read, write: if isAuthenticated()
+                          && (resource.data.userId == request.auth.uid || resource.data.triggeredBy == request.auth.uid);
+
+      // Recipients can read alerts addressed to them
+      allow read: if isAuthenticated() && isAlertRecipient(resource.data);
+
+      // Any authenticated user can read active emergency alerts (for real-time nearby safety feeds)
+      allow read: if isAuthenticated() && resource.data.status == 'active';
+
+      // Admin can read ALL active alerts (for the dashboard)
+      allow read: if isAdmin();
+
+      // Any authenticated user can CREATE a new alert (to trigger SOS)
+      allow create: if isAuthenticated();
+    }
+
+    // ─── alerts Collection (Lowercase - for compatibility) ───────────────
+    match /alerts/{alertId} {
+      allow read, write: if isAuthenticated()
+                          && (resource.data.userId == request.auth.uid || resource.data.triggeredBy == request.auth.uid);
+
+      allow read: if isAuthenticated() && (isAlertRecipient(resource.data) || resource.data.status == 'active');
+
+      allow read: if isAdmin();
+
+      allow create: if isAuthenticated();
+    }
+
+    // ─── Reports Collection ──────────────────────────────────────────────
+    // Covers CircleFind (Lost/Found) reports and Map Unsafe-Location reports
+    match /reports/{reportId} {
+      // Anyone authenticated can read reports (community feature)
+      allow read: if isAuthenticated();
+
+      // Anyone authenticated can create a report
+      allow create: if isAuthenticated();
+
+      // 1. Report owner (matching either reporterUid OR reportedBy) can update/edit their report
+      // 2. Any user can upvote / amplify (confidenceScore, upvotes, boostCount, boostedBy)
+      allow update: if isAuthenticated()
+                    && (resource.data.get('reporterUid', '') == request.auth.uid
+                        || resource.data.get('reportedBy', '') == request.auth.uid
+                        || request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['confidenceScore', 'upvotes', 'boostCount', 'boostedBy']));
+
+      // 1. Report owner (matching either reporterUid OR reportedBy) can delete their own report
+      // 2. Admins can delete ANY report
+      allow delete: if isAuthenticated()
+                    && (resource.data.get('reporterUid', '') == request.auth.uid
+                        || resource.data.get('reportedBy', '') == request.auth.uid
+                        || isAdmin());
+
+      // Admins can update/moderate any report
+      allow update: if isAdmin();
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isAuthenticated() && (
+          resource.data.userId == request.auth.uid ||
+          isAdmin()
+        );
+      }
+    }
+
+    // ─── Matches Collection ──────────────────────────────────────────────
+    match /matches/{matchId} {
+      // Only the two parties involved in a match can read or update it
+      allow read: if isAuthenticated()
+                  && (request.auth.uid == resource.data.lostReporterId
+                      || request.auth.uid == resource.data.foundReporterId);
+
+      allow create: if isAuthenticated();
+
+      allow update: if isAuthenticated()
+                    && (request.auth.uid == resource.data.lostReporterId
+                        || request.auth.uid == resource.data.foundReporterId);
+
+      allow read, update: if isAdmin();
+
+      // ─── Chat messages inside a match ──────────────────────────────
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated()
+          && (request.auth.uid == get(/databases/$(database)/documents/matches/$(matchId)).data.lostReporterId
+              || request.auth.uid == get(/databases/$(database)/documents/matches/$(matchId)).data.foundReporterId);
+      }
+    }
+
+    // ─── BLE Tags Collection ─────────────────────────────────────────────
+    match /bleTags/{tagId} {
+      // Only the paired owner can read/write their tag data
+      allow read, write: if isAuthenticated()
+                          && resource.data.ownerUid == request.auth.uid;
+
+      // Parent can read child's paired tag data
+      allow read: if isLinkedParent(resource.data.ownerUid);
+    }
+
+    // ─── Audit Log Collection (Supports both auditLog and auditLogs) ──────
+    match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // ─── Default: deny everything else ───────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
