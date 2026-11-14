@@ -37,6 +37,8 @@ import { useUnsafeZones } from '../../hooks/useUnsafeZones';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationReportModal';
 import { getRouteCandidates, rankRouteCandidates } from '../../services/saferRouteService';
+import NotificationBell from '../../components/common/NotificationBell';
+import ThemeToggle from '../../components/ThemeToggle';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -1361,9 +1363,8 @@ function MapHeader({ title, isDark, colors, insets, onToggleTheme, headingMode, 
           </View>
         )}
       </View>
-      <TouchableOpacity onPress={onToggleTheme} style={{ padding: 8 }}>
-        <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={22} color="#FFF" />
-      </TouchableOpacity>
+      <ThemeToggle iconColor="#FFF" style={{ marginRight: 6 }} />
+      <NotificationBell iconColor="#FFF" size={20} />
     </LinearGradient>
   );
 }

@@ -16,6 +16,8 @@ import ChildHistoryScreen from '../screens/parentchild/ChildHistoryScreen';
 import TrustedCircleScreen from '../screens/account/TrustedCircleScreen';
 import VerifyEmailScreen from '../screens/account/VerifyEmailScreen';
 import EditProfileScreen from '../screens/account/EditProfileScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import NotificationSettingsScreen from '../screens/account/NotificationSettingsScreen';
 
 const Stack = createStackNavigator();
 
@@ -94,6 +96,22 @@ export default function AppNavigator() {
               component={EditProfileScreen}
               options={{
                 title: 'Edit Profile',
+                headerShown: true,
+              }}
+            />
+            <Stack.Screen
+              name={ROUTES.NOTIFICATIONS}
+              component={NotificationsScreen}
+              options={{
+                title: 'Notifications',
+                headerShown: true,
+              }}
+            />
+            <Stack.Screen
+              name={ROUTES.NOTIFICATION_SETTINGS}
+              component={NotificationSettingsScreen}
+              options={{
+                title: 'Notification Settings',
                 headerShown: true,
               }}
             />

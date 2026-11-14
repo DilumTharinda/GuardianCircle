@@ -48,6 +48,7 @@ import Toast from '../../components/common/Toast';
 import { ROLES, isAdmin } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
 import { RADIUS, SHADOWS, SPACING } from '../../constants/theme';
+import { dispatchPersonalNotification } from '../../services/notificationCenterService';
 
 const KARMA_FOR_HELPING = 5;
 const CATEGORIES = ['Child', 'Pet', 'Electronics', 'Bag', 'Documents', 'Keys', 'Jewelry', 'Other'];
@@ -90,20 +91,33 @@ export default function CircleFindDetailScreen({ route, navigation }) {
 
   useEffect(() => {
     const reportRef = doc(db, CIRCLE_FIND_COLLECTION, reportId);
-    const unsubscribe = onSnapshot(reportRef, async (docSnap) => {
+    const unsubscribe = onSnapshot(reportRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         let repName = data.reportedByName || data.reporterName || data.authorName;
         let repPhoto = data.authorPhotoURL || data.reporterPhotoURL || null;
         const authorUid = data.reportedBy || data.reporterUid || data.userId || data.authorId;
 
+        // 1) Set report immediately so the details screen renders instantly without spinner lag
+        setReport({ id: docSnap.id, ...data, reportedByName: repName, authorPhotoURL: repPhoto });
+        setLoading(false);
+
+        // 2) Asynchronously fetch author profile in background (using cache first)
         if (authorUid) {
-          const profile = await fetchUserAccountProfile(authorUid, true);
-          if (profile.name) repName = profile.name;
-          if (profile.photoURL) repPhoto = profile.photoURL;
+          fetchUserAccountProfile(authorUid, false).then((profile) => {
+            if (profile && (profile.name || profile.photoURL)) {
+              setReport((prev) =>
+                prev ? {
+                  ...prev,
+                  reportedByName: profile.name || prev.reportedByName,
+                  authorPhotoURL: profile.photoURL !== undefined ? profile.photoURL : prev.authorPhotoURL,
+                } : prev
+              );
+            }
+          }).catch(() => {});
         }
 
-        // Resolve comprehensive full location details (building, street, suburb, city, district)
+        // 3) Resolve full detailed address in background
         const lat = data.location?.latitude;
         const lon = data.location?.longitude;
         if (typeof lat === 'number' && typeof lon === 'number') {
@@ -115,14 +129,12 @@ export default function CircleFindDetailScreen({ route, navigation }) {
                 if (shortAddr) setResolvedAddress(shortAddr);
               });
             }
-          });
+          }).catch(() => {});
         }
-
-        setReport({ id: docSnap.id, ...data, reportedByName: repName, authorPhotoURL: repPhoto });
       } else {
         setReport(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, [reportId]);
@@ -146,7 +158,6 @@ export default function CircleFindDetailScreen({ route, navigation }) {
       showToast('Please sign in to amplify community alerts.');
       return;
     }
-    setAmplifying(true);
 
     // Spring bounce animation on click
     Animated.sequence([
@@ -163,14 +174,52 @@ export default function CircleFindDetailScreen({ route, navigation }) {
       }),
     ]).start();
 
+    // 1) Optimistic UI update: instantly update boost state and counter
+    const nextBoosted = !isAmplified;
+    const nextCount = nextBoosted ? amplifyCount + 1 : Math.max(0, amplifyCount - 1);
+    const prevBoostedList = boostedList;
+
+    setReport((prev) => {
+      if (!prev) return prev;
+      const list = Array.isArray(prev.boostedBy) ? [...prev.boostedBy] : [];
+      const updatedList = nextBoosted
+        ? [...list, user.uid]
+        : list.filter((id) => id !== user.uid);
+      return {
+        ...prev,
+        boostedBy: updatedList,
+        boostCount: nextCount,
+      };
+    });
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    showToast(nextBoosted ? 'Alert amplified to community!' : 'Alert un-amplified');
+
+    // 2) Asynchronous update to Firestore with known boost state
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      await toggleAmplifyPost(reportId, user.uid);
-      showToast(isAmplified ? 'Alert un-amplified' : 'Alert amplified to community!');
+      await toggleAmplifyPost(reportId, user.uid, isAmplified, amplifyCount);
+
+      // Notify post author if another user amplifies their post
+      if (nextBoosted && report?.reportedBy && report.reportedBy !== user.uid) {
+        dispatchPersonalNotification(report.reportedBy, {
+          title: 'Post Amplified',
+          message: `Your alert for "${report.title || 'Item'}" was amplified by a community member.`,
+          type: 'circlefind',
+          linkRoute: 'CircleFindDetail',
+          linkParams: { reportId },
+        }).catch(() => {});
+      }
     } catch (err) {
-      showToast(err.message);
-    } finally {
-      setAmplifying(false);
+      // Revert if write fails
+      setReport((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          boostedBy: prevBoostedList,
+          boostCount: amplifyCount,
+        };
+      });
+      showToast(err.message || 'Failed to update amplify');
     }
   }
 

@@ -27,9 +27,17 @@ import {
 } from '../../services/alertService';
 import { triggerSOS } from '../../services/sosService';
 import { TRIGGER_TYPES } from '../../constants/alertTriggers';
+import { useTheme } from '../../context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import NotificationBell from '../../components/common/NotificationBell';
+import ThemeToggle from '../../components/ThemeToggle';
 
 export default function SafetyScreen() {
   const { user, userProfile } = useAuth();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const userId = user?.uid || 'demo_user_active';
 
   // Active SOS alert state
@@ -165,9 +173,27 @@ export default function SafetyScreen() {
     );
   };
 
+  const styles = getStyles(colors, isDark, insets);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* 1. Emergency Status Bar / Active Alert Banner */}
+    <View style={styles.screenWrapper}>
+      {/* Top Green Gradient Header matching Map Screen */}
+      <LinearGradient
+        colors={[colors.darkGreen, colors.darkGreenMid]}
+        style={styles.greenHeader}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.headerTitleRow}>
+          <Ionicons name="shield" size={22} color="#FFF" />
+          <Text style={styles.headerTitleText}>Safety</Text>
+        </View>
+        <ThemeToggle iconColor="#FFF" style={{ marginRight: 6 }} />
+        <NotificationBell iconColor="#FFF" size={20} />
+      </LinearGradient>
+
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* 1. Emergency Status Bar / Active Alert Banner */}
       {activeAlert ? (
         <View style={styles.activeEmergencyBanner}>
           <View style={styles.activeHeaderRow}>
@@ -400,12 +426,33 @@ export default function SafetyScreen() {
         onTriggerNow={handleTriggerFallSOSNow}
       />
     </ScrollView>
+  </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  content: { padding: 16, paddingBottom: 40 },
+const getStyles = (colors, isDark, insets) =>
+  StyleSheet.create({
+    screenWrapper: { flex: 1, backgroundColor: colors.background },
+    greenHeader: {
+      paddingTop: (insets?.top ?? 24) + 4,
+      paddingBottom: 12,
+      paddingHorizontal: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    headerTitleRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    headerTitleText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#FFF',
+    },
+    container: { flex: 1, backgroundColor: colors.background },
+    content: { padding: 16, paddingBottom: 40 },
 
   statusCard: {
     flexDirection: 'row',

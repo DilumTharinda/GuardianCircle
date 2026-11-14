@@ -5,6 +5,7 @@ import { auth, db } from './firebase';
 import { getCurrentCoordinates } from './locationService';
 import { isChild } from '../constants/roles';
 import { getTrustedCircleSOSRecipientIds } from './trustedCircleService';
+import { dispatchBroadcastNotification } from './notificationCenterService';
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
 
@@ -138,6 +139,20 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
   }
 
   // 7. Trigger Heavy Haptic Feedback Pattern
+  try {
+    // Also dispatch a real-time broadcast notification across the community
+    dispatchBroadcastNotification({
+      title: 'Emergency SOS Broadcast',
+      message: `${userName} triggered an Emergency SOS near ${locationData.address || 'nearby location'}.`,
+      type: 'sos',
+      priority: 'high',
+      targetRole: 'all',
+      linkRoute: 'Map',
+      linkParams: { focusAlertId: alertId, alertLocation: locationData },
+    }).catch(() => {});
+  } catch (notifErr) {
+    console.warn('[sosService] Broadcast notification dispatch skipped:', notifErr);
+  }
   try {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     // Double pulse
