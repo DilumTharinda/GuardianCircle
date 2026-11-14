@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { DeviceEventEmitter } from 'react-native';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from './firebase';
@@ -6,6 +7,7 @@ import { getCurrentCoordinates } from './locationService';
 import { isChild } from '../constants/roles';
 import { getTrustedCircleSOSRecipientIds } from './trustedCircleService';
 import { dispatchBroadcastNotification } from './notificationCenterService';
+import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
 
@@ -134,9 +136,32 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
 
     // Set currently active SOS ID for fast access
     await AsyncStorage.setItem('@guardiancircle_current_active_sos', alertId);
+
+    // Notify app components immediately of emergency dispatch
+    DeviceEventEmitter.emit('EMERGENCY_ALERT_UPDATED', { alertId, status: 'active', ...alertPayload });
   } catch (err) {
     console.warn('[sosService] Local storage save error:', err);
   }
+
+  // 7. Audit Log activity
+  logActivity({
+    action: AUDIT_ACTIONS.SOS_TRIGGER,
+    performedBy: uid,
+    targetUid: alertId,
+    targetEmail: userEmail,
+    userRole,
+    note: `SOS triggered via ${triggerType || 'in_app'}`,
+    metadata: {
+      alertId,
+      triggerType: triggerType || 'in_app',
+      location: {
+        lat: locationData.lat,
+        lng: locationData.lng,
+        address: locationData.address,
+      },
+      recipientCount: recipientIds.length,
+    },
+  }).catch(() => {});
 
   // 7. Trigger Heavy Haptic Feedback Pattern
   try {

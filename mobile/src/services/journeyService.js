@@ -10,6 +10,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 
 const COLLECTION = 'journeys';
 const MAX_TIMESTAMP_MS = 253402300799999;
@@ -139,6 +140,21 @@ export async function createJourney(uid, input = {}) {
     });
   });
   assertCurrentUser(uid);
+
+  // Audit log journey start
+  logActivity({
+    action: AUDIT_ACTIONS.JOURNEY_START,
+    performedBy: uid,
+    targetUid: ref.id,
+    note: `Started journey to ${name}`,
+    metadata: {
+      journeyId: ref.id,
+      destinationName: name,
+      destination,
+      startLocation,
+    },
+  }).catch(() => {});
+
   return {
     id: ref.id,
     ownerUid: uid,
@@ -203,6 +219,22 @@ export async function finishJourney(uid, id, input = {}) {
     return { ...journey, status, currentLocation, endedAtMs };
   });
   assertCurrentUser(uid);
+
+  // Audit log journey finish (arrived or cancelled)
+  logActivity({
+    action: status === 'arrived' ? AUDIT_ACTIONS.JOURNEY_COMPLETE : AUDIT_ACTIONS.JOURNEY_CANCEL,
+    performedBy: uid,
+    targetUid: id,
+    note: `Journey ${status} (distance to destination: ${Math.round(distanceToDestinationMeters)}m)`,
+    metadata: {
+      journeyId: id,
+      status,
+      endedAtMs,
+      distanceToDestinationMeters,
+      currentLocation,
+    },
+  }).catch(() => {});
+
   return result;
 }
 

@@ -26,6 +26,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { getForegroundLocationSnapshot, DEFAULT_COORDS } from '../../services/locationService';
 import { CIRCLE_FIND_COLLECTION, resolveReadableAddress, showToast } from '../../services/circleFindService';
+import { logActivity, AUDIT_ACTIONS } from '../../services/auditLogService';
 import Toast from '../../components/common/Toast';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -370,7 +371,23 @@ export default function CircleFindReportScreen({ navigation }) {
         createdAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, CIRCLE_FIND_COLLECTION), docPayload);
+      const newDocRef = await addDoc(collection(db, CIRCLE_FIND_COLLECTION), docPayload);
+
+      // Audit log report creation
+      logActivity({
+        action: AUDIT_ACTIONS.REPORT_CREATE,
+        performedBy: user?.uid,
+        targetUid: newDocRef.id,
+        userRole: userProfile?.role,
+        note: `Created CircleFind report: ${title.trim()} (${category})`,
+        metadata: {
+          reportId: newDocRef.id,
+          category,
+          title: title.trim(),
+          isUrgent: isChildAlert,
+          location: resolvedLoc,
+        },
+      }).catch(() => {});
 
       showToast(isChildAlert ? '🚨 Missing Child Alert Broadcasted!' : 'Published to CircleFind!');
       navigation.goBack();
