@@ -13,7 +13,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import HomeScreen from '../screens/shell/HomeScreen';
 import SOSScreen from '../screens/safety/SOSScreen';
 import MapScreen from '../screens/journey/MapScreen';
-import LostFoundNavigator from './LostFoundNavigator';
+import CircleFindNavigator from './CircleFindNavigator';
 import ProfileScreen from '../screens/account/ProfileScreen';
 import ParentDashboardScreen from '../screens/parentchild/ParentDashboardScreen';
 
@@ -21,11 +21,12 @@ const Tab = createBottomTabNavigator();
 
 // Icon map — Ionicons name for each route
 const TAB_ICONS = {
-  [ROUTES.HOME]:       { active: 'home', inactive: 'home-outline' },
-  [ROUTES.SAFETY]:     { active: 'shield', inactive: 'shield-outline' },
-  [ROUTES.MAP]:        { active: 'map', inactive: 'map-outline' },
-  [ROUTES.LOST_FOUND]: { active: 'search', inactive: 'search-outline' },
-  [ROUTES.PROFILE]:    { active: 'person', inactive: 'person-outline' },
+  [ROUTES.HOME]:        { active: 'home', inactive: 'home-outline' },
+  [ROUTES.SAFETY]:      { active: 'shield', inactive: 'shield-outline' },
+  [ROUTES.MAP]:         { active: 'map', inactive: 'map-outline' },
+  [ROUTES.CIRCLE_FIND]: { active: 'search', inactive: 'search-outline' },
+  [ROUTES.LOST_FOUND]:  { active: 'search', inactive: 'search-outline' },
+  [ROUTES.PROFILE]:     { active: 'person', inactive: 'person-outline' },
 };
 
 export default function MainTabNavigator() {
@@ -103,9 +104,9 @@ export default function MainTabNavigator() {
         />
       )}
       <Tab.Screen
-        name={ROUTES.LOST_FOUND}
-        component={LostFoundNavigator}
-        options={{ title: 'Lost & Found', tabBarLabel: 'Lost&Found', headerShown: false }}
+        name={ROUTES.CIRCLE_FIND}
+        component={CircleFindNavigator}
+        options={{ title: 'CircleFind', tabBarLabel: 'CircleFind', headerShown: false }}
       />
       <Tab.Screen
         name={ROUTES.PROFILE}

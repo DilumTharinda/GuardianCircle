@@ -12,11 +12,13 @@ import {
   sendPasswordResetEmail,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  deleteUser
+  deleteUser,
+  updateProfile,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { ROLES } from '../constants/roles';
+import { syncUserReportsAuthorName } from '../services/circleFindService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let GoogleSignin = null;
@@ -287,6 +289,17 @@ export function AuthProvider({ children }) {
       }
 
       await setDoc(doc(db, 'users', firebaseUser.uid), updateData, { merge: true });
+
+      // Keep Firebase Auth profile in sync
+      try {
+        await updateProfile(firebaseUser, {
+          displayName: newDisplayName,
+          ...(photoURL !== undefined && { photoURL }),
+        });
+      } catch (_) {}
+
+      // Automatically sync new display name & photoURL across all published CircleFind posts
+      syncUserReportsAuthorName(firebaseUser.uid, newDisplayName, photoURL).catch(() => {});
       
       setUserProfile(prev => ({
         ...prev,

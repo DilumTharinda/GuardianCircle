@@ -7,6 +7,7 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { CIRCLE_FIND_COLLECTION } from './circleFindService';
 
 const STOP_WORDS = new Set([
   'the', 'a', 'an', 'is', 'was', 'in', 'on', 'at', 'and', 'or',
@@ -65,7 +66,7 @@ function geohashProximityScore(geohashA, geohashB) {
  */
 export async function findMatchesForFoundReport(foundReport, maxResults = 5) {
   const q = query(
-    collection(db, 'reports'),
+    collection(db, CIRCLE_FIND_COLLECTION),
     where('type', '==', 'lost'),
     where('status', '==', 'lost'),
     orderBy('createdAt', 'desc'),
