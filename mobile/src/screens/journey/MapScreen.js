@@ -212,7 +212,16 @@ export default function MapScreen({ navigation, route }) {
       setReportOpen(true);
       navigation?.setParams?.({ openReport: undefined });
     }
-  }, [route?.params?.openReport, navigation]);
+    if (route?.params?.destination) {
+      const dest = route.params.destination;
+      navigation?.setParams?.({ destination: undefined });
+      if (dest && typeof dest.latitude === 'number' && typeof dest.longitude === 'number') {
+        setTimeout(() => {
+          handleRouteToDestination(dest);
+        }, 350);
+      }
+    }
+  }, [route?.params?.openReport, route?.params?.destination, navigation, handleRouteToDestination]);
 
   const mapRef = useRef(null);
   const headingSubscription = useRef(null);

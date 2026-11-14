@@ -2,17 +2,16 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ROUTES } from '../constants/routes';
 import { useTheme } from '../context/ThemeContext';
-import LostFoundScreen from '../screens/lostfound/LostFoundScreen';
-import ReportLostScreen from '../screens/lostfound/ReportLostScreen';
-import ReportFoundScreen from '../screens/lostfound/ReportFoundScreen';
-import MatchChatScreen from '../screens/lostfound/MatchChatScreen';
-import CommunityFeedScreen from '../screens/lostfound/CommunityFeedScreen';
-import LostFoundDetailScreen from '../screens/lostfound/LostFoundDetailScreen';
+import CircleFindScreen from '../screens/circlefind/CircleFindScreen';
+import CircleFindReportScreen from '../screens/circlefind/CircleFindReportScreen';
+import CircleFindDetailScreen from '../screens/circlefind/CircleFindDetailScreen';
+import MatchChatScreen from '../screens/circlefind/MatchChatScreen';
+import CommunityFeedScreen from '../screens/circlefind/CommunityFeedScreen';
 
 const Stack = createStackNavigator();
 
-export default function LostFoundNavigator() {
-  const { colors, isDark } = useTheme();
+export default function CircleFindNavigator() {
+  const { colors } = useTheme();
 
   return (
     <Stack.Navigator
@@ -30,19 +29,19 @@ export default function LostFoundNavigator() {
       }}
     >
       <Stack.Screen
-        name={ROUTES.LOST_FOUND_LIST}
-        component={LostFoundScreen}
+        name={ROUTES.CIRCLE_FIND_LIST}
+        component={CircleFindScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen
-        name={ROUTES.REPORT_LOST}
-        component={ReportLostScreen}
-        options={{ title: 'Report Lost Item' }}
+        name={ROUTES.CIRCLE_FIND_REPORT}
+        component={CircleFindReportScreen}
+        options={{ title: 'Report Missing Item' }}
       />
       <Stack.Screen
-        name={ROUTES.REPORT_FOUND}
-        component={ReportFoundScreen}
-        options={{ title: 'Report Found Item' }}
+        name={ROUTES.CIRCLE_FIND_DETAIL}
+        component={CircleFindDetailScreen}
+        options={{ title: 'Item Details' }}
       />
       <Stack.Screen
         name={ROUTES.MATCH_CHAT}
@@ -54,11 +53,7 @@ export default function LostFoundNavigator() {
         component={CommunityFeedScreen}
         options={{ title: 'Community Reports' }}
       />
-      <Stack.Screen
-        name={ROUTES.LOST_FOUND_DETAIL}
-        component={LostFoundDetailScreen}
-        options={{ title: 'Report Details' }}
-      />
     </Stack.Navigator>
   );
 }
+

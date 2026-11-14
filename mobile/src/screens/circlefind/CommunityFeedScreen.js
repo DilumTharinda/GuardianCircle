@@ -7,8 +7,8 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  Alert,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   collection,
@@ -27,6 +27,8 @@ import { useAuth } from '../../context/AuthContext';
 import { ROUTES } from '../../constants/routes';
 import { awardKarma } from '../../services/karmaService';
 import { useTheme } from '../../context/ThemeContext';
+import { CIRCLE_FIND_COLLECTION, showToast } from '../../services/circleFindService';
+import Toast from '../../components/common/Toast';
 
 const LOW_CONFIDENCE_THRESHOLD = 1;
 
@@ -45,12 +47,12 @@ export default function CommunityFeedScreen({ navigation }) {
     setLoading(true);
     try {
       const lostQuery = query(
-        collection(db, 'reports'),
+        collection(db, CIRCLE_FIND_COLLECTION),
         where('type', '==', 'lost'),
         limit(20)
       );
       const foundQuery = query(
-        collection(db, 'reports'),
+        collection(db, CIRCLE_FIND_COLLECTION),
         where('type', '==', 'found'),
         limit(20)
       );
@@ -85,11 +87,11 @@ export default function CommunityFeedScreen({ navigation }) {
 
   async function handleConfirm(report) {
     if (report.reportedBy === user.uid) {
-      Alert.alert('Not allowed', 'You cannot confirm your own report.');
+      showToast('You cannot confirm your own report', 'info');
       return;
     }
     if (hasAlreadyConfirmed(report)) {
-      Alert.alert('Already confirmed', 'You have already confirmed this report.');
+      showToast('You have already confirmed this report', 'info');
       return;
     }
 
@@ -117,8 +119,9 @@ export default function CommunityFeedScreen({ navigation }) {
             : r
         )
       );
+      showToast('Report confirmed! Karma awarded.');
     } catch (error) {
-      Alert.alert('Error', error.message);
+      showToast(error.message, 'error');
     } finally {
       setConfirmingId(null);
     }
@@ -127,7 +130,8 @@ export default function CommunityFeedScreen({ navigation }) {
   const styles = getStyles(colors);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Community Reports</Text>
       <Text style={styles.sub}>Help confirm reports you recognize</Text>
 
@@ -145,7 +149,7 @@ export default function CommunityFeedScreen({ navigation }) {
               key={report.id}
               style={styles.reportCard}
               onPress={() =>
-                navigation.navigate(ROUTES.LOST_FOUND_DETAIL, {
+                navigation.navigate(ROUTES.CIRCLE_FIND_DETAIL, {
                   reportId: report.id,
                 })
               }
@@ -156,9 +160,21 @@ export default function CommunityFeedScreen({ navigation }) {
               )}
               <View style={styles.reportInfo}>
                 <View style={styles.reportHeaderRow}>
-                  <Text style={styles.reportType}>
-                    {report.type === 'lost' ? '🔴 Lost' : '🟢 Found'}
-                  </Text>
+                  <View style={styles.typeBadge}>
+                    <MaterialIcons
+                      name={report.type === 'lost' ? 'search' : 'auto-awesome'}
+                      size={14}
+                      color={report.type === 'lost' ? '#D32F2F' : colors.darkGreenMid}
+                    />
+                    <Text
+                      style={[
+                        styles.reportType,
+                        report.type === 'lost' ? styles.reportTypeLost : styles.reportTypeFound,
+                      ]}
+                    >
+                      {report.type === 'lost' ? 'Lost' : 'Found'}
+                    </Text>
+                  </View>
                   {(report.confidenceScore || 0) <= LOW_CONFIDENCE_THRESHOLD && (
                     <Text style={styles.lowConfidenceBadge}>Low confidence</Text>
                   )}
@@ -181,13 +197,20 @@ export default function CommunityFeedScreen({ navigation }) {
                   {confirmingId === report.id ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.confirmButtonText}>
-                      {isOwnReport
-                        ? 'This is your report'
-                        : alreadyConfirmed
-                        ? '✓ Confirmed'
-                        : '✓ Confirm this report'}
-                    </Text>
+                    <View style={styles.confirmBtnContent}>
+                      {alreadyConfirmed ? (
+                        <MaterialIcons name="done-all" size={16} color="#FFF" />
+                      ) : !isOwnReport ? (
+                        <MaterialIcons name="thumb-up" size={14} color="#FFF" />
+                      ) : null}
+                      <Text style={styles.confirmButtonText}>
+                        {isOwnReport
+                          ? 'This is your report'
+                          : alreadyConfirmed
+                          ? 'Confirmed'
+                          : 'Confirm this report'}
+                      </Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -195,7 +218,9 @@ export default function CommunityFeedScreen({ navigation }) {
           );
         })
       )}
-    </ScrollView>
+      </ScrollView>
+      <Toast />
+    </View>
   );
 }
 
@@ -221,7 +246,14 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  reportType: { fontWeight: 'bold', fontSize: 14, color: colors.textPrimary },
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reportType: { fontWeight: 'bold', fontSize: 14 },
+  reportTypeLost: { color: '#D32F2F' },
+  reportTypeFound: { color: colors.darkGreenMid },
   lowConfidenceBadge: {
     fontSize: 11,
     color: '#fff',
@@ -238,7 +270,14 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   confirmButtonDisabled: { backgroundColor: colors.textMuted },
   confirmButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  confirmBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
 });
