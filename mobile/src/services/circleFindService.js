@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import { db } from './firebase';
+import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 export { showToast } from '../components/common/Toast';
 
 /**
@@ -360,6 +361,15 @@ export async function toggleAmplifyPost(reportId, userId, currentBoostState = un
         console.warn('[toggleAmplifyPost] direct update fallback failed:', e);
       }
     }
+
+    // Audit log amplify action
+    logActivity({
+      action: AUDIT_ACTIONS.REPORT_AMPLIFY,
+      performedBy: userId,
+      targetUid: reportId,
+      note: nextBoosted ? 'Amplified post' : 'Un-amplified post',
+      metadata: { reportId, isBoosted: nextBoosted, boostCount: nextCount },
+    }).catch(() => {});
 
     return {
       isBoosted: nextBoosted,

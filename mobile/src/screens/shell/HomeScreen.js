@@ -24,9 +24,11 @@ import {
   Vibration,
   Dimensions,
   Platform,
+  Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -37,6 +39,8 @@ import { getPendingRequests, acceptLinkRequest } from '../../services/parentChil
 import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
 import { getCurrentCoordinates } from '../../services/locationService';
+import { subscribeToNearbyActivities } from '../../services/nearbyActivityService';
+import SosButton from '../../components/SosButton';
 
 const { width } = Dimensions.get('window');
 
@@ -82,6 +86,33 @@ export default function HomeScreen() {
   const [sosHeld, setSosHeld] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [currentLocationText, setCurrentLocationText] = useState(userProfile?.location || 'Acquiring location...');
+  const [currentUserCoords, setCurrentUserCoords] = useState(null);
+  const [nearbyActivities, setNearbyActivities] = useState([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+  const [showWelcomeUsernamePrompt, setShowWelcomeUsernamePrompt] = useState(false);
+
+  // Check if user is on default generated username and show welcome prompt once
+  useEffect(() => {
+    async function checkWelcomePrompt() {
+      if (!userProfile?.username || !userProfile?.uid) return;
+      const key = `@shown_username_welcome_${userProfile.uid}`;
+      const shown = await AsyncStorage.getItem(key);
+      if (!shown) {
+        setShowWelcomeUsernamePrompt(true);
+      }
+    }
+    checkWelcomePrompt();
+  }, [userProfile?.username, userProfile?.uid]);
+
+  const dismissWelcomePrompt = async (goToEdit = false) => {
+    if (userProfile?.uid) {
+      await AsyncStorage.setItem(`@shown_username_welcome_${userProfile.uid}`, 'true');
+    }
+    setShowWelcomeUsernamePrompt(false);
+    if (goToEdit) {
+      navigation.navigate(ROUTES.EDIT_PROFILE);
+    }
+  };
 
   // Automatically fetch live GPS location and update header (city/village & district)
   useEffect(() => {
@@ -93,6 +124,9 @@ export default function HomeScreen() {
         const displayLocation = coords?.areaName || coords?.address;
         if (isMounted && displayLocation) {
           setCurrentLocationText(displayLocation);
+          if (typeof coords.lat === 'number' && typeof coords.lng === 'number') {
+            setCurrentUserCoords({ latitude: coords.lat, longitude: coords.lng });
+          }
         }
       } catch (err) {
         console.warn('[HomeScreen] Location update error:', err);
@@ -108,6 +142,20 @@ export default function HomeScreen() {
       clearInterval(locInterval);
     };
   }, []);
+
+  // Real-time subscription to nearby activities based on live coordinates
+  useEffect(() => {
+    setLoadingActivities(true);
+
+    const unsubscribe = subscribeToNearbyActivities(currentUserCoords, (items) => {
+      setNearbyActivities(items);
+      setLoadingActivities(false);
+    }, 4);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUserCoords]);
 
   useEffect(() => {
     if (childMode && userProfile?.uid) {
@@ -315,90 +363,18 @@ export default function HomeScreen() {
           </View>
 
           {/* ══════════════════════════════════════════════
-              Animated SOS Button — centred in explicit container
+              Safety SOS Button Hub & Radar Animation (matching Safety Screen)
           ══════════════════════════════════════════════ */}
           <View style={styles.sosSection}>
-            {/* Fixed-size container so rings don't overflow */}
-            <View style={styles.sosContainer}>
-
-              {/* Outer pulse ring (ring 2) — anchored at centre */}
-              <Animated.View
-                style={[
-                  styles.sosRingBase,
-                  {
-                    width: RING2_D,
-                    height: RING2_D,
-                    borderRadius: RING2_D / 2,
-                    top: (CONTAINER - RING2_D) / 2,
-                    left: (CONTAINER - RING2_D) / 2,
-                    backgroundColor: colors.sosRing,
-                    transform: [{ scale: ring2Scale }],
-                    opacity: ring2Opacity,
-                  },
-                ]}
-              />
-
-              {/* Inner pulse ring (ring 1) */}
-              <Animated.View
-                style={[
-                  styles.sosRingBase,
-                  {
-                    width: RING1_D,
-                    height: RING1_D,
-                    borderRadius: RING1_D / 2,
-                    top: (CONTAINER - RING1_D) / 2,
-                    left: (CONTAINER - RING1_D) / 2,
-                    backgroundColor: colors.sosRing,
-                    transform: [{ scale: ring1Scale }],
-                    opacity: ring1Opacity,
-                  },
-                ]}
-              />
-
-              {/* SOS button — centred in container */}
-              <Animated.View
-                style={[
-                  styles.sosBtnWrapper,
-                  {
-                    top: (CONTAINER - SOS_SIZE) / 2,
-                    left: (CONTAINER - SOS_SIZE) / 2,
-                    shadowColor: colors.primary,
-                    transform: [{ scale: sosScale }],
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.sosBtnTouch}
-                  onPress={() => navigation.navigate(ROUTES.SAFETY)}
-                  onPressIn={onSOSPressIn}
-                  onPressOut={onSOSPressOut}
-                  activeOpacity={0.9}
-                  accessibilityLabel="Emergency SOS — tap to open, hold to activate"
-                  accessibilityRole="button"
-                >
-                  <LinearGradient
-                    colors={[colors.primary, colors.primaryDark]}
-                    style={styles.sosBtnGradient}
-                  >
-                    <Ionicons name="alert-circle-outline" size={40} color="#fff" />
-                    <Text style={styles.sosBtnLabel}>SOS</Text>
-                  </LinearGradient>
-
-                  {/* Hold progress bar at bottom of button */}
-                  {sosHeld && (
-                    <View style={styles.sosProgressTrack}>
-                      <Animated.View
-                        style={[styles.sosProgressFill, { width: sosProgressWidth }]}
-                      />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-
-            </View>{/* end sosContainer */}
+            <SosButton
+              size="large"
+              onAlertTriggered={(alertId) => {
+                navigation.navigate(ROUTES.SAFETY);
+              }}
+            />
 
             <Text style={[styles.sosHint, { color: colors.textSecondary }]}>
-              Hold 2 seconds to alert your trusted circle
+              Tap to broadcast emergency to your trusted circle
             </Text>
           </View>
           {/* ══════════════════════════════════════════════ */}
@@ -425,43 +401,132 @@ export default function HomeScreen() {
             <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 0 }]}>
               Nearby activity
             </Text>
-            <TouchableOpacity>
-              <Text style={[styles.seeAll, { color: colors.darkGreenMid }]}>See all</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={{ height: SPACING.sm }} />
 
-          {isParent && (
+          {/* Real Nearby Activities List */}
+          {nearbyActivities.length > 0 ? (
+            nearbyActivities.map((act) => {
+              let iconElement = <Ionicons name="warning-outline" size={24} color={colors.warnOrange} />;
+              if (act.type === 'sos') {
+                iconElement = <Ionicons name="alert-circle" size={24} color={colors.dangerRed} />;
+              } else if (act.type === 'circlefind') {
+                const cat = (act.category || '').toLowerCase();
+                if (cat.includes('pet') || cat.includes('dog') || cat.includes('cat')) {
+                  iconElement = <MaterialCommunityIcons name="paw-outline" size={24} color={colors.missingPink} />;
+                } else if (cat.includes('child')) {
+                  iconElement = <MaterialIcons name="child-care" size={24} color={colors.dangerRed} />;
+                } else {
+                  iconElement = <Ionicons name="search-outline" size={24} color={colors.darkGreenMid} />;
+                }
+              }
+
+              const handleItemPress = () => {
+                if (act.type === 'sos') {
+                  const loc = act.data?.location || {};
+                  const lat = loc.lat || loc.latitude;
+                  const lng = loc.lng || loc.longitude;
+                  navigation.navigate(ROUTES.MAP, {
+                    focusAlertId: act.data?.alertId,
+                    targetLocation: (typeof lat === 'number' && typeof lng === 'number') ? {
+                      latitude: lat,
+                      longitude: lng,
+                      title: act.title,
+                      isEmergency: true,
+                    } : undefined,
+                  });
+                } else if (act.type === 'unsafe_hazard') {
+                  const loc = act.data?.location || {};
+                  navigation.navigate(ROUTES.MAP, {
+                    focusHazardId: act.data?.hazardId,
+                    targetLocation: (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') ? {
+                      latitude: loc.latitude,
+                      longitude: loc.longitude,
+                      title: act.title,
+                      isHazard: true,
+                    } : undefined,
+                  });
+                } else if (act.type === 'circlefind') {
+                  navigation.navigate(ROUTES.CIRCLE_FIND_DETAIL, {
+                    reportId: act.data.reportId,
+                  });
+                }
+              };
+
+              return (
+                <NearbyCard
+                  key={act.id}
+                  colors={colors}
+                  icon={iconElement}
+                  title={act.title}
+                  sub={act.sub}
+                  chip={act.chip}
+                  chipType={act.chipType}
+                  onPress={handleItemPress}
+                />
+              );
+            })
+          ) : (
             <NearbyCard
               colors={colors}
-              icon={<Ionicons name="people-circle-outline" size={24} color={colors.darkGreenMid} />}
-              title="Trusted circle"
-              sub="4 members active"
-              chip="Active"
+              icon={<Ionicons name="shield-checkmark-outline" size={24} color={colors.darkGreenMid} />}
+              title="All clear in your area"
+              sub="No active emergency alerts or reported hazards nearby."
+              chip="Safe"
               chipType="safe"
+              onPress={() => navigation.navigate(ROUTES.MAP)}
             />
           )}
-          <NearbyCard
-            colors={colors}
-            icon={<Ionicons name="warning-outline" size={24} color={colors.warnOrange} />}
-            title="Unsafe area · Galle Road"
-            sub="Poor lighting · 400m away"
-            chip="Caution"
-            chipType="warn"
-          />
-          <NearbyCard
-            colors={colors}
-            icon={<MaterialCommunityIcons name="paw-outline" size={24} color={colors.missingPink} />}
-            title="Possible match found"
-            sub="Lost dog reported near Nugegoda"
-            chip="Missing"
-            chipType="missing"
-          />
 
           <View style={{ height: 32 }} />
         </Animated.View>
       </ScrollView>
+
+      {/* Onboarding Welcome Username Modal Prompt */}
+      <Modal
+        visible={showWelcomeUsernamePrompt}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => dismissWelcomePrompt(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.welcomeModalCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.welcomeIconCircle, { backgroundColor: colors.safeGreenLight }]}>
+              <MaterialCommunityIcons name="account-star-outline" size={32} color={colors.darkGreenMid} />
+            </View>
+            <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]}>Welcome to GuardianCircle!</Text>
+            <Text style={[styles.welcomeMessage, { color: colors.textSecondary }]}>
+              Your assigned temporary username is:
+            </Text>
+            <View style={[styles.usernamePillBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Text style={[styles.usernamePillText, { color: colors.darkGreenMid }]}>
+                @{userProfile?.username || 'user'}
+              </Text>
+            </View>
+            <Text style={[styles.welcomeSubMessage, { color: colors.textMuted }]}>
+              Would you like to pick a personalized unique username now?
+            </Text>
+
+            <View style={styles.welcomeModalButtons}>
+              <TouchableOpacity
+                style={[styles.welcomeSecondaryBtn, { borderColor: colors.border }]}
+                onPress={() => dismissWelcomePrompt(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.welcomeSecondaryText, { color: colors.textSecondary }]}>Keep for now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.welcomePrimaryBtn, { backgroundColor: colors.darkGreenMid }]}
+                onPress={() => dismissWelcomePrompt(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.welcomePrimaryText}>Pick Username</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -499,27 +564,38 @@ function QuickCard({ colors, iconName, label, onPress }) {
   );
 }
 
-function NearbyCard({ colors, icon, title, sub, chip, chipType }) {
+function NearbyCard({ colors, icon, title, sub, chip, chipType, onPress }) {
   const chipColors = {
     safe:    { bg: colors.safeGreenLight,  text: colors.darkGreenMid },
     warn:    { bg: colors.warnOrangeLight, text: colors.warnOrange },
     missing: { bg: colors.missingPinkLight, text: colors.missingPink },
+    sos:     { bg: '#FFEBEE', text: '#D32F2F' },
   };
-  const c = chipColors[chipType];
+  const c = chipColors[chipType] || chipColors.safe;
 
   return (
-    <View style={[styles.nearbyCard, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}>
-      <View style={[styles.nearbyIcon, { backgroundColor: colors.background }]}>
-        {icon}
+    <TouchableOpacity
+      activeOpacity={onPress ? 0.8 : 1}
+      onPress={onPress}
+      disabled={!onPress}
+    >
+      <View style={[styles.nearbyCard, { backgroundColor: colors.surface, shadowColor: colors.shadow }]}>
+        <View style={[styles.nearbyIcon, { backgroundColor: colors.background }]}>
+          {icon}
+        </View>
+        <View style={styles.nearbyText}>
+          <Text style={[styles.nearbyTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={[styles.nearbySub, { color: colors.textSecondary }]} numberOfLines={1}>
+            {sub}
+          </Text>
+        </View>
+        <View style={[styles.nearbyChip, { backgroundColor: c.bg }]}>
+          <Text style={[styles.nearbyChipText, { color: c.text }]}>{chip}</Text>
+        </View>
       </View>
-      <View style={styles.nearbyText}>
-        <Text style={[styles.nearbyTitle, { color: colors.textPrimary }]}>{title}</Text>
-        <Text style={[styles.nearbySub, { color: colors.textSecondary }]}>{sub}</Text>
-      </View>
-      <View style={[styles.nearbyChip, { backgroundColor: c.bg }]}>
-        <Text style={[styles.nearbyChipText, { color: c.text }]}>{chip}</Text>
-      </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -718,4 +794,87 @@ const styles = StyleSheet.create({
   nearbySub:   { fontSize: 11, marginTop: 2 },
   nearbyChip:  { paddingHorizontal: 10, paddingVertical: 5, borderRadius: RADIUS.full },
   nearbyChipText: { fontSize: 11, fontWeight: FONTS.bold },
+
+  // Welcome Username Modal Styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.xl,
+  },
+  welcomeModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: RADIUS.xxl,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+  },
+  welcomeIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.md,
+  },
+  welcomeTitle: {
+    fontSize: FONTS.lg,
+    fontWeight: FONTS.bold,
+    textAlign: 'center',
+    marginBottom: SPACING.xs,
+  },
+  welcomeMessage: {
+    fontSize: FONTS.sm,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  usernamePillBox: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+  },
+  usernamePillText: {
+    fontSize: FONTS.base,
+    fontWeight: FONTS.bold,
+  },
+  welcomeSubMessage: {
+    fontSize: FONTS.xs,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+  },
+  welcomeModalButtons: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    width: '100%',
+  },
+  welcomeSecondaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  welcomeSecondaryText: {
+    fontSize: FONTS.sm,
+    fontWeight: FONTS.semiBold,
+  },
+  welcomePrimaryBtn: {
+    flex: 1.2,
+    paddingVertical: 12,
+    borderRadius: RADIUS.lg,
+    alignItems: 'center',
+  },
+  welcomePrimaryText: {
+    color: '#fff',
+    fontSize: FONTS.sm,
+    fontWeight: FONTS.bold,
+  },
 });

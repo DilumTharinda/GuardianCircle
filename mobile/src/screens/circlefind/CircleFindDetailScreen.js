@@ -44,6 +44,7 @@ import {
   resolveFullDetailedAddress,
   showToast,
 } from '../../services/circleFindService';
+import { logActivity, AUDIT_ACTIONS } from '../../services/auditLogService';
 import Toast from '../../components/common/Toast';
 import { ROLES, isAdmin } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
@@ -146,6 +147,29 @@ export default function CircleFindDetailScreen({ route, navigation }) {
   const isOwner = Boolean(user?.uid && postAuthor === user.uid);
   const canDelete = isOwner || isUserAdmin;
 
+  // Custom Back Button handler to ensure returning to CircleFind feed
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate(ROUTES.CIRCLE_FIND);
+    }
+  };
+
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={handleGoBack}
+          style={{ paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center' }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   // Check if current user amplified
   const boostedList = Array.isArray(report?.boostedBy) ? report.boostedBy : [];
   const isAmplified = user?.uid ? boostedList.includes(user.uid) : false;
@@ -240,6 +264,16 @@ export default function CircleFindDetailScreen({ route, navigation }) {
         await awardKarma(user.uid, KARMA_FOR_HELPING);
       }
 
+      // Audit log status change
+      logActivity({
+        action: AUDIT_ACTIONS.REPORT_STATUS_CHANGE,
+        performedBy: user?.uid,
+        targetUid: reportId,
+        userRole: userProfile?.role,
+        note: `Report status changed to ${newStatus}`,
+        metadata: { reportId, previousStatus: currentStatus, newStatus },
+      }).catch(() => {});
+
       showToast(`Status updated to ${newStatus.toUpperCase()}`);
     } catch (error) {
       showToast(error.message);
@@ -267,6 +301,17 @@ export default function CircleFindDetailScreen({ route, navigation }) {
           deletedAt: serverTimestamp(),
         });
       }
+
+      // Audit log report deletion
+      logActivity({
+        action: AUDIT_ACTIONS.REPORT_DELETE,
+        performedBy: user?.uid,
+        targetUid: reportId,
+        userRole: userProfile?.role,
+        note: `Deleted CircleFind report (${report.title || 'Item'})`,
+        metadata: { reportId, deletedBy: user?.uid, title: report.title },
+      }).catch(() => {});
+
       showToast('Report permanently removed');
       navigation.goBack();
     } catch (err) {

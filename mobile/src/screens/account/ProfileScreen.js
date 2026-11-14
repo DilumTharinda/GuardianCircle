@@ -127,6 +127,9 @@ export default function ProfileScreen() {
             <Text style={styles.headerName}>
               {userProfile?.displayName || 'User Name'}
             </Text>
+            <Text style={styles.headerUsername}>
+              @{userProfile?.username || 'username'}
+            </Text>
             <Text style={styles.headerEmail}>
               {userProfile?.email || 'email@example.com'}
             </Text>
@@ -187,6 +190,12 @@ export default function ProfileScreen() {
             icon={<Ionicons name="person-outline" size={18} color={colors.darkGreenMid} />}
             label="Display Name"
             value={userProfile?.displayName || '—'}
+          />
+          <InfoRow
+            colors={colors}
+            icon={<Ionicons name="at-outline" size={18} color={colors.darkGreenMid} />}
+            label="Username"
+            value={userProfile?.username || '—'}
           />
           <InfoRow
             colors={colors}
@@ -341,6 +350,12 @@ const getStyles = (colors) => StyleSheet.create({
     fontSize: FONTS.xl,
     fontWeight: FONTS.bold,
     color: '#fff',
+  },
+  headerUsername: {
+    fontSize: FONTS.sm,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: FONTS.medium,
+    marginBottom: 2,
   },
   headerEmail: {
     fontSize: FONTS.sm,

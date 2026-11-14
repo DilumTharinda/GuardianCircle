@@ -15,10 +15,12 @@ import {
   deleteUser,
   updateProfile,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { ROLES } from '../constants/roles';
 import { syncUserReportsAuthorName } from '../services/circleFindService';
+import { UsernameService } from '../services/usernameService';
+import { logActivity, AUDIT_ACTIONS } from '../services/auditLogService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let GoogleSignin = null;
@@ -146,6 +148,7 @@ export function AuthProvider({ children }) {
       uid: 'parent_user_default',
       email: 'lavindi.parent@guardiancircle.test',
       displayName: 'Lavindi Tharunya',
+      username: 'demo_parent',
       role: ROLES.PARENT_GUARDIAN,
       photoURL: null,
       notificationPrefs: {
@@ -175,10 +178,25 @@ export function AuthProvider({ children }) {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
 
+    // Generate a unique random username
+    let username = UsernameService.generateRandomUsername();
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+      const taken = await UsernameService.isUsernameTaken(username);
+      if (!taken) {
+        isUnique = true;
+      } else {
+        username = UsernameService.generateRandomUsername();
+        attempts++;
+      }
+    }
+
     const profileData = {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
       displayName,
+      username,
       role,
       photoURL: null,
       createdAt: serverTimestamp(),
@@ -194,7 +212,9 @@ export function AuthProvider({ children }) {
     };
 
     try {
+      // Atomically assign the username and create the profile
       await setDoc(doc(db, 'users', firebaseUser.uid), profileData);
+      await UsernameService.assignUsername(firebaseUser.uid, username);
     } catch (e) {
       console.warn('[AuthContext] Firestore profile save failed:', e);
     }
@@ -209,6 +229,18 @@ export function AuthProvider({ children }) {
     await safeStorage.setItem('auth_token', token);
 
     setUserProfile(profileData);
+
+    // Audit log registration
+    logActivity({
+      action: AUDIT_ACTIONS.AUTH_REGISTER,
+      performedBy: firebaseUser.uid,
+      targetUid: firebaseUser.uid,
+      targetEmail: email,
+      userRole: role,
+      note: `User registered with role: ${role}`,
+      metadata: { displayName, role, username },
+    }).catch(() => {});
+
     return firebaseUser;
   }
 
@@ -216,6 +248,16 @@ export function AuthProvider({ children }) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const token = await userCredential.user.getIdToken();
     await safeStorage.setItem('auth_token', token);
+
+    // Audit log login
+    logActivity({
+      action: AUDIT_ACTIONS.AUTH_LOGIN,
+      performedBy: userCredential.user.uid,
+      targetUid: userCredential.user.uid,
+      targetEmail: email,
+      note: 'User logged in via email/password',
+    }).catch(() => {});
+
     return userCredential.user;
   }
 
@@ -223,10 +265,25 @@ export function AuthProvider({ children }) {
     const docRef = doc(db, 'users', firebaseUser.uid);
     const docSnap = await getDoc(docRef);
     if (!docSnap.exists()) {
+      // Generate unique random username for Google users
+      let username = UsernameService.generateRandomUsername();
+      let isUnique = false;
+      let attempts = 0;
+      while (!isUnique && attempts < 10) {
+        const taken = await UsernameService.isUsernameTaken(username);
+        if (!taken) {
+          isUnique = true;
+        } else {
+          username = UsernameService.generateRandomUsername();
+          attempts++;
+        }
+      }
+
       const profileData = {
         uid: firebaseUser.uid,
         email: firebaseUser.email,
         displayName: firebaseUser.displayName || 'Guardian User',
+        username,
         role: ROLES.PRIMARY_USER,
         photoURL: firebaseUser.photoURL || null,
         createdAt: serverTimestamp(),
@@ -241,18 +298,33 @@ export function AuthProvider({ children }) {
         karma: 0,
       };
       await setDoc(docRef, profileData);
+      await UsernameService.assignUsername(firebaseUser.uid, username);
       setUserProfile(profileData);
     } else {
       setUserProfile(docSnap.data());
     }
   }
 
-  async function updateUserProfile(newDisplayName, newRole, password, photoURL = null) {
+  async function updateUserProfile(newDisplayName, newRole, password, photoURL = null, newUsername = null) {
     const firebaseUser = auth.currentUser;
     if (!firebaseUser) throw new Error('No authenticated user found.');
-    
+
     if (firebaseUser.uid === 'parent_user_default') {
       throw new Error('Cannot edit the demo user.');
+    }
+
+    // Handle Username Update
+    if (newUsername && newUsername !== userProfile.username) {
+      const validation = UsernameService.validateUsername(newUsername);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      try {
+        await UsernameService.updateUsername(firebaseUser.uid, userProfile.username, newUsername);
+      } catch (e) {
+        throw new Error(e.message || 'Failed to update username.');
+      }
     }
 
     // Re-authenticate if role changed
@@ -283,7 +355,11 @@ export function AuthProvider({ children }) {
         role: newRole,
         updatedAt: serverTimestamp(),
       };
-      
+
+      if (newUsername && newUsername !== userProfile.username) {
+        updateData.username = newUsername.toLowerCase();
+      }
+
       if (photoURL !== undefined) {
         updateData.photoURL = photoURL;
       }
@@ -300,11 +376,26 @@ export function AuthProvider({ children }) {
 
       // Automatically sync new display name & photoURL across all published CircleFind posts
       syncUserReportsAuthorName(firebaseUser.uid, newDisplayName, photoURL).catch(() => {});
-      
+
+      // Audit log profile update
+      logActivity({
+        action: AUDIT_ACTIONS.PROFILE_UPDATE,
+        performedBy: firebaseUser.uid,
+        targetUid: firebaseUser.uid,
+        userRole: newRole,
+        note: 'User updated profile details',
+        metadata: {
+          roleChanged: newRole !== userProfile?.role,
+          newRole,
+          nameChanged: newDisplayName !== userProfile?.displayName,
+        },
+      }).catch(() => {});
+
       setUserProfile(prev => ({
         ...prev,
         displayName: newDisplayName,
         role: newRole,
+        username: newUsername || prev.username,
         ...(photoURL !== undefined && { photoURL }),
       }));
     } catch (e) {
@@ -349,6 +440,22 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    const currentUid = user?.uid;
+    const currentEmail = user?.email;
+    const currentRole = userProfile?.role;
+
+    // Audit log logout
+    if (currentUid) {
+      logActivity({
+        action: AUDIT_ACTIONS.AUTH_LOGOUT,
+        performedBy: currentUid,
+        targetUid: currentUid,
+        targetEmail: currentEmail,
+        userRole: currentRole,
+        note: 'User logged out',
+      }).catch(() => {});
+    }
+
     await safeStorage.deleteItem('auth_token');
     await AsyncStorage.removeItem('@demo_parent_user');
     try {
@@ -359,6 +466,11 @@ export function AuthProvider({ children }) {
   }
 
   async function resetPassword(email) {
+    logActivity({
+      action: AUDIT_ACTIONS.AUTH_PASSWORD_RESET,
+      targetEmail: email,
+      note: `Password reset email requested for ${email}`,
+    }).catch(() => {});
     return sendPasswordResetEmail(auth, email);
   }
 

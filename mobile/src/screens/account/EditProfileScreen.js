@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { SELECTABLE_ROLES } from '../../constants/roles';
+import { checkUsernameAvailability } from '../../services/firestoreService';
 
 export default function EditProfileScreen() {
   const { userProfile, updateUserProfile, deleteUserAccount } = useAuth();
@@ -29,12 +30,55 @@ export default function EditProfileScreen() {
   const navigation = useNavigation();
 
   const [name, setName] = useState(userProfile?.displayName || '');
+  const [username, setUsername] = useState(userProfile?.username || '');
   const [role, setRole] = useState(userProfile?.role || '');
   const [password, setPassword] = useState('');
   const [photoURL, setPhotoURL] = useState(userProfile?.photoURL || null);
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState({ loading: false, available: null, message: '' });
+  const checkTimeoutRef = useRef(null);
+
+  const initialUsername = userProfile?.username || '';
+  const usernameChanged = username.trim().toLowerCase() !== initialUsername.toLowerCase();
+
+  // Real-time username availability checker with debounce
+  useEffect(() => {
+    if (checkTimeoutRef.current) {
+      clearTimeout(checkTimeoutRef.current);
+    }
+
+    const cleanUsername = username.trim();
+    if (!cleanUsername) {
+      setUsernameStatus({ loading: false, available: null, message: '' });
+      return;
+    }
+
+    if (cleanUsername.toLowerCase() === initialUsername.toLowerCase()) {
+      setUsernameStatus({ loading: false, available: true, message: 'Current username' });
+      return;
+    }
+
+    setUsernameStatus({ loading: true, available: null, message: 'Checking availability...' });
+
+    checkTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await checkUsernameAvailability(cleanUsername);
+        if (res.available) {
+          setUsernameStatus({ loading: false, available: true, message: 'Username available!' });
+        } else {
+          setUsernameStatus({ loading: false, available: false, message: res.error || 'Unavailable' });
+        }
+      } catch (err) {
+        setUsernameStatus({ loading: false, available: null, message: 'Could not check availability' });
+      }
+    }, 450);
+
+    return () => {
+      if (checkTimeoutRef.current) clearTimeout(checkTimeoutRef.current);
+    };
+  }, [username, initialUsername]);
 
   // Delete modal state
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -91,6 +135,11 @@ export default function EditProfileScreen() {
       return;
     }
 
+    if (usernameChanged && usernameStatus.available === false) {
+      setError(usernameStatus.message || 'Please choose a valid and available username.');
+      return;
+    }
+
     if (roleChanged && !password) {
       setError('Please enter your password to confirm role change.');
       return;
@@ -103,7 +152,8 @@ export default function EditProfileScreen() {
         finalPhotoUrl = await uploadToCloudinary(photoURL);
       }
       
-      await updateUserProfile(name, role, password, finalPhotoUrl);
+      const targetUsername = usernameChanged ? username.trim().toLowerCase() : null;
+      await updateUserProfile(name, role, password, finalPhotoUrl, targetUsername);
       Alert.alert('Success', 'Profile updated successfully.');
       navigation.goBack();
     } catch (e) {
@@ -165,6 +215,52 @@ export default function EditProfileScreen() {
             onChangeText={setName}
             editable={!loading}
           />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={styles.label}>Unique Username</Text>
+            {usernameStatus.loading && (
+              <ActivityIndicator size="small" color={colors.darkGreenMid} />
+            )}
+            {!usernameStatus.loading && usernameStatus.available === true && (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle" size={16} color="#2E7D32" />
+                <Text style={{ fontSize: 12, color: '#2E7D32', marginLeft: 4, fontWeight: '600' }}>Available</Text>
+              </View>
+            )}
+            {!usernameStatus.loading && usernameStatus.available === false && (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="close-circle" size={16} color="#D32F2F" />
+                <Text style={{ fontSize: 12, color: '#D32F2F', marginLeft: 4, fontWeight: '600' }}>Taken / Invalid</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }]}>
+            <Text style={{ color: colors.textMuted, fontWeight: '700', marginRight: 4, fontSize: 16 }}>@</Text>
+            <TextInput
+              style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}
+              placeholder="username"
+              placeholderTextColor={colors.textMuted}
+              value={username}
+              onChangeText={(text) => setUsername(text.replace(/[^a-zA-Z0-9_]/g, ''))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
+          </View>
+          {usernameStatus.message && (
+            <Text
+              style={{
+                fontSize: 11,
+                marginTop: 4,
+                color: usernameStatus.available === true ? '#2E7D32' : (usernameStatus.available === false ? '#D32F2F' : colors.textMuted),
+              }}
+            >
+              {usernameStatus.message}
+            </Text>
+          )}
         </View>
 
         <View style={styles.inputGroup}>

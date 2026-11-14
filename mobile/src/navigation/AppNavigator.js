@@ -18,6 +18,7 @@ import VerifyEmailScreen from '../screens/account/VerifyEmailScreen';
 import EditProfileScreen from '../screens/account/EditProfileScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import NotificationSettingsScreen from '../screens/account/NotificationSettingsScreen';
+import CircleFindDetailScreen from '../screens/circlefind/CircleFindDetailScreen';
 
 const Stack = createStackNavigator();
 
@@ -112,6 +113,14 @@ export default function AppNavigator() {
               component={NotificationSettingsScreen}
               options={{
                 title: 'Notification Settings',
+                headerShown: true,
+              }}
+            />
+            <Stack.Screen
+              name={ROUTES.CIRCLE_FIND_DETAIL}
+              component={CircleFindDetailScreen}
+              options={{
+                title: 'Item Details',
                 headerShown: true,
               }}
             />

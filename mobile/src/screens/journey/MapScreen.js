@@ -39,6 +39,7 @@ import UnsafeLocationReportModal from '../../components/journey/UnsafeLocationRe
 import { getRouteCandidates, rankRouteCandidates } from '../../services/saferRouteService';
 import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
+import { subscribeToActiveEmergencyAlerts } from '../../services/alertService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -223,7 +224,23 @@ export default function MapScreen({ navigation, route }) {
         }, 350);
       }
     }
-  }, [route?.params?.openReport, route?.params?.destination, navigation, handleRouteToDestination]);
+    if (route?.params?.targetLocation) {
+      const target = route.params.targetLocation;
+      navigation?.setParams?.({ targetLocation: undefined });
+      if (target && typeof target.latitude === 'number' && typeof target.longitude === 'number') {
+        setTimeout(() => {
+          if (mapRef.current?.animateToRegion) {
+            mapRef.current.animateToRegion({
+              latitude: target.latitude,
+              longitude: target.longitude,
+              latitudeDelta: 0.008,
+              longitudeDelta: 0.008,
+            }, 800);
+          }
+        }, 400);
+      }
+    }
+  }, [route?.params?.openReport, route?.params?.destination, route?.params?.targetLocation, navigation, handleRouteToDestination]);
 
   const mapRef = useRef(null);
   const headingSubscription = useRef(null);
@@ -232,6 +249,16 @@ export default function MapScreen({ navigation, route }) {
 
   const mapAvailable = MapView && Marker && Platform.OS !== 'web';
   const unsafeZones = useUnsafeZones(user?.uid, true);
+
+  // Active Emergency SOS Alerts (only shown while active; removed immediately when resolved or cancelled)
+  const [activeEmergencyAlerts, setActiveEmergencyAlerts] = useState([]);
+
+  useEffect(() => {
+    const unsub = subscribeToActiveEmergencyAlerts((alerts) => {
+      setActiveEmergencyAlerts(alerts);
+    });
+    return () => unsub();
+  }, []);
 
   // ── Animated Rings Moving Out (like HomeScreen SOS waves) ───────────────────
   const ring1Scale = useRef(new Animated.Value(1.0)).current;
@@ -1079,6 +1106,85 @@ export default function MapScreen({ navigation, route }) {
             </Marker>
           ))}
 
+          {/* 2b. Active Emergency SOS Alerts (Unique Emergency Megaphone / Siren Icon, Distinct Red Glow, Only shown while active) */}
+          {activeEmergencyAlerts.map((alert) => {
+            const loc = alert.location || {};
+            const lat = typeof loc.latitude === 'number' ? loc.latitude : loc.lat;
+            const lng = typeof loc.longitude === 'number' ? loc.longitude : loc.lng;
+
+            if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+
+            return (
+              <Marker
+                key={`emergency-${alert.id}-z${zoomMetrics.level}`}
+                coordinate={{ latitude: lat, longitude: lng }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                zIndex={90}
+                tracksViewChanges={true}
+                onPress={() => {
+                  Alert.alert(
+                    "🚨 Active Emergency SOS",
+                    `Emergency alert triggered by ${alert.userName || 'a community member'}.\nLocation: ${loc.address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}`,
+                    [{ text: "OK" }]
+                  );
+                }}
+              >
+                <View
+                  style={[
+                    styles.emergencyMarkerContainer,
+                    {
+                      width: zoomMetrics.containerSize,
+                      height: zoomMetrics.containerSize,
+                    },
+                  ]}
+                >
+                  {/* Outer Emergency Pulse Ring */}
+                  <Animated.View
+                    style={[
+                      styles.emergencyPulseRingBase,
+                      {
+                        width: zoomMetrics.ringD,
+                        height: zoomMetrics.ringD,
+                        borderRadius: zoomMetrics.ringD / 2,
+                        transform: [{ scale: ring2Scale }],
+                        opacity: ring2Opacity,
+                      },
+                    ]}
+                  />
+
+                  {/* Inner Emergency Pulse Ring */}
+                  <Animated.View
+                    style={[
+                      styles.emergencyPulseRingBase,
+                      {
+                        width: zoomMetrics.ringD,
+                        height: zoomMetrics.ringD,
+                        borderRadius: zoomMetrics.ringD / 2,
+                        transform: [{ scale: ring1Scale }],
+                        opacity: ring1Opacity,
+                      },
+                    ]}
+                  />
+
+                  {/* Breathing Core Emergency Badge (Megaphone / Siren icon) */}
+                  <Animated.View
+                    style={[
+                      styles.emergencyMarkerBadge,
+                      {
+                        width: zoomMetrics.badgeSize,
+                        height: zoomMetrics.badgeSize,
+                        borderRadius: zoomMetrics.badgeSize / 2,
+                        transform: [{ scale: coreScale }],
+                      },
+                    ]}
+                  >
+                    <Ionicons name="megaphone" size={zoomMetrics.warningSize} color="#FFF" />
+                  </Animated.View>
+                </View>
+              </Marker>
+            );
+          })}
+
           {/* 3. Highlighted Route Path (Google Maps Style) */}
           {activeRoute && Polyline && (
             <>
@@ -1438,7 +1544,7 @@ const getStyles = (colors, isDark, insets) => {
       elevation: 4,
     },
     warningMarkerBadge: {
-      backgroundColor: colors.dangerRed || '#D32F2F',
+      backgroundColor: '#E65100', // Distinct Deep Amber Orange for Unsafe Caution areas
       borderWidth: 2.5,
       borderColor: '#FFF',
       alignItems: 'center',
@@ -1448,6 +1554,33 @@ const getStyles = (colors, isDark, insets) => {
       shadowOpacity: 0.9,
       shadowRadius: 5,
       elevation: 8,
+    },
+    emergencyMarkerContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emergencyPulseRingBase: {
+      position: 'absolute',
+      backgroundColor: 'transparent',
+      borderWidth: 3,
+      borderColor: '#D50000',
+      shadowColor: '#D50000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.85,
+      shadowRadius: 4,
+      elevation: 6,
+    },
+    emergencyMarkerBadge: {
+      backgroundColor: '#D50000', // Vivid High-Priority Crimson Red for SOS
+      borderWidth: 2.5,
+      borderColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.95,
+      shadowRadius: 6,
+      elevation: 10,
     },
     searchButton: {
       position: 'absolute',
