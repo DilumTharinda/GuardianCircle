@@ -397,8 +397,8 @@ export default function HomeScreen() {
             )}
             <QuickCard colors={colors} iconName="map-outline" label="Safe map"
               onPress={() => navigation.navigate(ROUTES.MAP)} />
-            <QuickCard colors={colors} iconName="search-outline" label="Lost&found"
-              onPress={() => navigation.navigate(ROUTES.LOST_FOUND)} />
+            <QuickCard colors={colors} iconName="search-outline" label="CircleFind"
+              onPress={() => navigation.navigate(ROUTES.CIRCLE_FIND)} />
             {!childMode && (
               <QuickCard colors={colors} iconName="people-outline" label="Circle"
                 onPress={() => navigation.navigate(ROUTES.TRUSTED_CIRCLE)} />
