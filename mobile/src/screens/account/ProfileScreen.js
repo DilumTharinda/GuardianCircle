@@ -27,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
+import { ROUTES } from '../../constants/routes';
 import ThemeToggle from '../../components/ThemeToggle';
 
 function formatRole(role) {
@@ -221,7 +222,7 @@ export default function ProfileScreen() {
             colors={colors}
             icon={<Ionicons name="notifications-outline" size={18} color={colors.darkGreenMid} />}
             label="Notifications"
-            onPress={() => {}}
+            onPress={() => navigation.navigate(ROUTES.NOTIFICATION_SETTINGS)}
           />
           <MenuRow
             colors={colors}

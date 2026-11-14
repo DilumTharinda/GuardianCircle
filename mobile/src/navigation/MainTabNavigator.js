@@ -77,7 +77,7 @@ export default function MainTabNavigator() {
       <Tab.Screen
         name={ROUTES.SAFETY}
         component={SOSScreen}
-        options={{ title: 'Safety', tabBarLabel: 'Safety' }}
+        options={{ title: 'Safety', tabBarLabel: 'Safety', headerShown: false }}
       />
       {/* Hide Map tab for child accounts to simplify their UI */}
       {!childMode && (

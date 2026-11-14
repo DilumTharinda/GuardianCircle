@@ -46,6 +46,8 @@ export const ROUTES = {
   CHILD_HISTORY: 'ChildHistory',
 
   // Account sub-screens (Member 6)
+  NOTIFICATIONS: 'Notifications',
   NOTIFICATION_PREFS: 'NotificationPrefs',
+  NOTIFICATION_SETTINGS: 'NotificationSettings',
   EDIT_PROFILE: 'EditProfile',
 };

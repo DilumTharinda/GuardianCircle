@@ -34,6 +34,9 @@ import { isChild, ROLES } from '../../constants/roles';
 import { ROUTES } from '../../constants/routes';
 import { FONTS, SPACING, RADIUS } from '../../constants/theme';
 import { getPendingRequests, acceptLinkRequest } from '../../services/parentChildService';
+import NotificationBell from '../../components/common/NotificationBell';
+import ThemeToggle from '../../components/ThemeToggle';
+import { getCurrentCoordinates } from '../../services/locationService';
 
 const { width } = Dimensions.get('window');
 
@@ -78,6 +81,33 @@ export default function HomeScreen() {
   const sosProgress  = useRef(new Animated.Value(0)).current;
   const [sosHeld, setSosHeld] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [currentLocationText, setCurrentLocationText] = useState(userProfile?.location || 'Acquiring location...');
+
+  // Automatically fetch live GPS location and update header (city/village & district)
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchLiveLocation() {
+      try {
+        const coords = await getCurrentCoordinates();
+        const displayLocation = coords?.areaName || coords?.address;
+        if (isMounted && displayLocation) {
+          setCurrentLocationText(displayLocation);
+        }
+      } catch (err) {
+        console.warn('[HomeScreen] Location update error:', err);
+      }
+    }
+
+    fetchLiveLocation();
+    // Refresh location every 45s
+    const locInterval = setInterval(fetchLiveLocation, 45000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(locInterval);
+    };
+  }, []);
 
   useEffect(() => {
     if (childMode && userProfile?.uid) {
@@ -202,30 +232,15 @@ export default function HomeScreen() {
               <Text style={styles.greetingName}>{firstName}</Text>
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.75)" />
-                <Text style={styles.locationText}>
-                  {userProfile?.location || 'Colombo, Western Province'}
+                <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
+                  {currentLocationText}
                 </Text>
               </View>
             </View>
             {/* Right: theme toggle + bell */}
             <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={toggleTheme}
-                accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                <Ionicons
-                  name={isDark ? 'sunny-outline' : 'moon-outline'}
-                  size={20}
-                  color="#fff"
-                />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} accessibilityLabel="Notifications">
-                <Animated.View style={{ transform: [{ scale: bellAnim }] }}>
-                  <Ionicons name="notifications-outline" size={22} color="#fff" />
-                </Animated.View>
-                <View style={[styles.notifDot, { borderColor: colors.darkGreenMid }]} />
-              </TouchableOpacity>
+              <ThemeToggle iconColor="#fff" />
+              <NotificationBell iconColor="#fff" size={20} />
             </View>
           </View>
         </LinearGradient>

@@ -112,10 +112,21 @@ export async function getCurrentCoordinates() {
     const accuracy = pos.coords.accuracy || 10;
 
     let address = 'Current Location';
+    let areaName = '';
     try {
       const geocoded = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
       if (geocoded && geocoded.length > 0) {
         const place = geocoded[0];
+
+        // Format clean area name: near city or village, district (no house / street address)
+        const locality = place.city || place.subregion || place.district || '';
+        const district = place.region || (place.district !== locality ? place.district : '') || '';
+        const areaParts = [locality, district].filter(Boolean);
+        const uniqueAreaParts = [...new Set(areaParts)];
+        if (uniqueAreaParts.length > 0) {
+          areaName = uniqueAreaParts.join(', ');
+        }
+
         const parts = [
           place.name,
           place.street,
@@ -135,6 +146,7 @@ export async function getCurrentCoordinates() {
       lng,
       accuracy,
       address,
+      areaName: areaName || address,
       altitude: pos.coords.altitude || null,
       speed: pos.coords.speed || null,
       timestamp: pos.timestamp,
@@ -146,6 +158,7 @@ export async function getCurrentCoordinates() {
       lng: DEFAULT_COORDS.longitude,
       accuracy: null,
       address: DEFAULT_COORDS.address,
+      areaName: 'Colombo, Western Province',
     };
   }
 }
