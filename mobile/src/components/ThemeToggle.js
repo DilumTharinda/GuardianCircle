@@ -3,7 +3,7 @@ import { TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
-export default function ThemeToggle({ style, iconColor }) {
+export default function ThemeToggle({ style, iconColor, backgroundColor }) {
   const { isDark, toggleTheme } = useTheme();
   
   // Subtle scale animation on toggle
@@ -16,16 +16,22 @@ export default function ThemeToggle({ style, iconColor }) {
     ]).start();
   }, [isDark]);
 
+  const defaultBg = backgroundColor || (iconColor === '#fff' || iconColor === '#FFF'
+    ? 'rgba(255,255,255,0.15)'
+    : isDark
+    ? 'rgba(255,255,255,0.08)'
+    : 'rgba(0,0,0,0.05)');
+
   return (
     <TouchableOpacity
       onPress={toggleTheme}
       activeOpacity={0.7}
-      style={[styles.container, style]}
+      style={[styles.container, { backgroundColor: defaultBg }, style]}
     >
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
         <Ionicons
-          name={isDark ? "moon" : "sunny"}
-          size={24}
+          name={isDark ? "sunny-outline" : "moon-outline"}
+          size={20}
           color={iconColor || (isDark ? '#FFF' : '#333')}
         />
       </Animated.View>
@@ -35,7 +41,9 @@ export default function ThemeToggle({ style, iconColor }) {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },

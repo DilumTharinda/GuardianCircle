@@ -45,6 +45,7 @@ import {
 import Toast from '../../components/common/Toast';
 import { RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import ThemeToggle from '../../components/ThemeToggle';
+import NotificationBell from '../../components/common/NotificationBell';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -139,7 +140,12 @@ export default function CircleFindScreen({ navigation }) {
           return item.type !== 'unsafe_location' && !isDeleted;
         });
 
-      // Always resolve author account profile (name + avatar) from users collection
+      // 1) IMMEDIATELY display the feed to the user without waiting for external API network calls
+      setReports([...loaded]);
+      setLoading(false);
+      setRefreshing(false);
+
+      // 2) Non-blocking background hydration of author names & avatars from cache/users
       const authorUids = [
         ...new Set(
           loaded
@@ -149,63 +155,87 @@ export default function CircleFindScreen({ navigation }) {
       ];
 
       if (authorUids.length > 0) {
-        const profileMap = {};
-        await Promise.all(
+        Promise.all(
           authorUids.map(async (uid) => {
-            const profile = await fetchUserAccountProfile(uid, true);
+            const profile = await fetchUserAccountProfile(uid, false);
+            return { uid, profile };
+          })
+        ).then((profiles) => {
+          const profileMap = {};
+          profiles.forEach(({ uid, profile }) => {
             if (profile && (profile.name || profile.photoURL)) {
               profileMap[uid] = profile;
             }
-          })
-        );
-
-        if (Object.keys(profileMap).length > 0) {
-          loaded.forEach((r) => {
-            const uid = r.reportedBy || r.reporterUid || r.userId || r.authorId;
-            if (uid && profileMap[uid]) {
-              const { name, photoURL } = profileMap[uid];
-              if (name) {
-                r.reportedByName = name;
-                r.reporterName = name;
-                r.authorName = name;
-              }
-              if (photoURL !== undefined) {
-                r.authorPhotoURL = photoURL;
-                r.reporterPhotoURL = photoURL;
-              }
-            }
           });
-        }
+
+          if (Object.keys(profileMap).length > 0) {
+            setReports((prev) =>
+              prev.map((r) => {
+                const uid = r.reportedBy || r.reporterUid || r.userId || r.authorId;
+                if (uid && profileMap[uid]) {
+                  const { name, photoURL } = profileMap[uid];
+                  return {
+                    ...r,
+                    reportedByName: name || r.reportedByName,
+                    reporterName: name || r.reporterName,
+                    authorName: name || r.authorName,
+                    authorPhotoURL: photoURL !== undefined ? photoURL : r.authorPhotoURL,
+                    reporterPhotoURL: photoURL !== undefined ? photoURL : r.reporterPhotoURL,
+                  };
+                }
+                return r;
+              })
+            );
+          }
+        }).catch(() => {});
       }
 
-      // Resolve human-friendly location (city/village & district) for posts
-      await Promise.all(
-        loaded.map(async (r) => {
-          const lat = r.location?.latitude;
-          const lon = r.location?.longitude;
-          const currentName = r.location?.addressName || '';
-          const isGeneric =
-            !currentName ||
-            currentName === 'Tagged Area' ||
-            currentName === 'Current GPS Location' ||
-            currentName.toLowerCase().includes('selected on map') ||
-            currentName.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/);
-          if (isGeneric && typeof lat === 'number' && typeof lon === 'number') {
-            const area = await resolveReadableAddress(lat, lon);
-            if (area) {
-              r.location = {
-                ...r.location,
-                addressName: area,
-              };
-            }
-          }
-        })
-      );
+      // 3) Background hydration for geocoding human-readable location addresses
+      const itemsNeedingGeocode = loaded.filter((r) => {
+        const lat = r.location?.latitude;
+        const lon = r.location?.longitude;
+        const currentName = r.location?.addressName || '';
+        const isGeneric =
+          !currentName ||
+          currentName === 'Tagged Area' ||
+          currentName === 'Current GPS Location' ||
+          currentName.toLowerCase().includes('selected on map') ||
+          currentName.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/);
+        return isGeneric && typeof lat === 'number' && typeof lon === 'number';
+      });
 
-      setReports(loaded);
+      if (itemsNeedingGeocode.length > 0) {
+        Promise.all(
+          itemsNeedingGeocode.slice(0, 15).map(async (r) => {
+            const area = await resolveReadableAddress(r.location.latitude, r.location.longitude);
+            return { id: r.id, area };
+          })
+        ).then((resolved) => {
+          const areaMap = {};
+          resolved.forEach(({ id, area }) => {
+            if (area) areaMap[id] = area;
+          });
+
+          if (Object.keys(areaMap).length > 0) {
+            setReports((prev) =>
+              prev.map((r) => {
+                if (areaMap[r.id]) {
+                  return {
+                    ...r,
+                    location: {
+                      ...r.location,
+                      addressName: areaMap[r.id],
+                    },
+                  };
+                }
+                return r;
+              })
+            );
+          }
+        }).catch(() => {});
+      }
     } catch (err) {
       console.warn('[CircleFindScreen] fetchReports error:', err?.message || err);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -257,28 +287,49 @@ export default function CircleFindScreen({ navigation }) {
       }),
     ]).start();
 
+    // 1) Optimistic UI update: instantly update count & state without waiting for Firestore
+    const currentBoosted = Array.isArray(item.boostedBy) ? [...item.boostedBy] : [];
+    const isCurrentlyBoosted = currentBoosted.includes(user.uid);
+    const nextBoosted = !isCurrentlyBoosted;
+    const baseCount = item.boostCount ?? currentBoosted.length;
+    const nextCount = nextBoosted ? baseCount + 1 : Math.max(0, baseCount - 1);
+
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id !== item.id) return r;
+        const list = Array.isArray(r.boostedBy) ? [...r.boostedBy] : [];
+        const updatedList = nextBoosted
+          ? [...list, user.uid]
+          : list.filter((uid) => uid !== user.uid);
+        return {
+          ...r,
+          boostedBy: updatedList,
+          boostCount: nextCount,
+        };
+      })
+    );
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    showToast(nextBoosted ? 'Alert amplified!' : 'Alert un-amplified');
+    setAmplifyingId(null);
+
+    // 2) Asynchronous Firestore sync using known currentBoosted state
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      const res = await toggleAmplifyPost(item.id, user.uid);
-      showToast(res.isBoosted ? 'Alert amplified!' : 'Alert un-amplified');
+      await toggleAmplifyPost(item.id, user.uid, isCurrentlyBoosted, baseCount);
+    } catch (err) {
+      console.warn('Amplify error, reverting:', err.message);
+      // Revert if error
       setReports((prev) =>
         prev.map((r) => {
           if (r.id !== item.id) return r;
-          const currentBoosted = Array.isArray(r.boostedBy) ? [...r.boostedBy] : [];
-          const updatedBoosted = res.isBoosted
-            ? [...currentBoosted, user.uid]
-            : currentBoosted.filter((uid) => uid !== user.uid);
           return {
             ...r,
-            boostedBy: updatedBoosted,
-            boostCount: res.boostCount,
+            boostedBy: currentBoosted,
+            boostCount: baseCount,
           };
         })
       );
-    } catch (err) {
-      console.warn('Amplify error:', err.message);
-    } finally {
-      setAmplifyingId(null);
+      showToast('Could not update amplify status.');
     }
   };
 
@@ -531,7 +582,8 @@ export default function CircleFindScreen({ navigation }) {
               <Text style={styles.karmaText}>{karmaScore}</Text>
             </View>
           )}
-          <ThemeToggle style={{ marginLeft: 6 }} />
+          <ThemeToggle style={{ marginRight: 6 }} />
+          <NotificationBell size={20} />
         </View>
       </View>
 

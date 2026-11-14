@@ -327,14 +327,47 @@ export function calculateCircleFindScore(post, userLocation) {
  * Toggle Amplify/Boost for a CircleFind report
  * @param {string} reportId
  * @param {string} userId
+ * @param {boolean} [currentBoostState] - Optional known current boosted state to avoid extra reads
+ * @param {number} [currentBoostCount] - Optional known current boost count
  * @returns {Promise<{ isBoosted: boolean, boostCount: number }>}
  */
-export async function toggleAmplifyPost(reportId, userId) {
+export async function toggleAmplifyPost(reportId, userId, currentBoostState = undefined, currentBoostCount = undefined) {
   if (!reportId || !userId) {
     throw new Error('Report ID and User ID are required to amplify.');
   }
 
   const reportRef = doc(db, CIRCLE_FIND_COLLECTION, reportId);
+
+  // If the caller already provided the current state, apply updateDoc directly without blocking on getDoc
+  if (typeof currentBoostState === 'boolean') {
+    const isRemoving = currentBoostState;
+    const nextBoosted = !isRemoving;
+    const baseCount = typeof currentBoostCount === 'number' ? currentBoostCount : 0;
+    const nextCount = isRemoving ? Math.max(0, baseCount - 1) : baseCount + 1;
+
+    try {
+      await updateDoc(reportRef, {
+        boostedBy: isRemoving ? arrayRemove(userId) : arrayUnion(userId),
+        boostCount: increment(isRemoving ? -1 : 1),
+        upvotes: increment(isRemoving ? -1 : 1),
+      });
+    } catch (_) {
+      try {
+        await updateDoc(reportRef, {
+          upvotes: increment(isRemoving ? -1 : 1),
+        });
+      } catch (e) {
+        console.warn('[toggleAmplifyPost] direct update fallback failed:', e);
+      }
+    }
+
+    return {
+      isBoosted: nextBoosted,
+      boostCount: nextCount,
+    };
+  }
+
+  // Fallback: fetch doc snapshot if state wasn't known
   const snap = await getDoc(reportRef);
   if (!snap.exists()) {
     throw new Error('Post does not exist.');
