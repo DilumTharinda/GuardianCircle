@@ -1,4 +1,14 @@
+import { Platform } from 'react-native';
 import * as Location from 'expo-location';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth } from './firebase';
+
+// In-memory memory location cache for instantaneous 0ms fallback retrieval
+let cachedLatestLocation = null;
+
+export function getCachedCoordinates() {
+  return cachedLatestLocation;
+}
 
 /**
  * Gets one foreground location snapshot without using fallback coordinates.
@@ -88,6 +98,8 @@ export const DEFAULT_COORDS = {
 
 /**
  * Requests location permissions and returns current GPS coordinates.
+ * Optimized for emergency response: races high-accuracy fix against fast cached position
+ * and performs non-blocking reverse geocoding to prevent delay.
  */
 export async function getCurrentCoordinates() {
   try {
@@ -102,64 +114,100 @@ export async function getCurrentCoordinates() {
       };
     }
 
-    const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-      timeout: 10000,
+    // 1. First grab last known position if immediately available (<100ms)
+    let lastKnown = null;
+    try {
+      lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 60000 });
+    } catch (_) {}
+
+    // 2. Fetch fresh position with bounded 3.5s timeout for emergency responsiveness
+    const freshPositionPromise = Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced, // Fast, high reliability without stalling on cold GPS lock
     });
 
-    const lat = pos.coords.latitude;
-    const lng = pos.coords.longitude;
-    const accuracy = pos.coords.accuracy || 10;
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 3500));
+    const pos = (await Promise.race([freshPositionPromise, timeoutPromise])) || lastKnown;
+
+    const lat = pos?.coords?.latitude ?? DEFAULT_COORDS.latitude;
+    const lng = pos?.coords?.longitude ?? DEFAULT_COORDS.longitude;
+    const accuracy = pos?.coords?.accuracy || 15;
 
     let address = 'Current Location';
     let areaName = '';
-    try {
-      const geocoded = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      if (geocoded && geocoded.length > 0) {
-        const place = geocoded[0];
 
-        // Format clean area name: near city or village, district (no house / street address)
-        const locality = place.city || place.subregion || place.district || '';
-        const district = place.region || (place.district !== locality ? place.district : '') || '';
-        const areaParts = [locality, district].filter(Boolean);
-        const uniqueAreaParts = [...new Set(areaParts)];
-        if (uniqueAreaParts.length > 0) {
-          areaName = uniqueAreaParts.join(', ');
-        }
+    // 3. Fast non-blocking or bounded geocoding (max 1.5s on native; skip on web where expo-location geocoding is removed in SDK 49+)
+    if (Platform.OS !== 'web') {
+      try {
+        const geoPromise = Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        const geoTimeout = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+        const geocoded = await Promise.race([geoPromise, geoTimeout]);
 
-        const parts = [
-          place.name,
-          place.street,
-          place.district || place.subregion || place.city,
-          place.region,
-        ].filter(Boolean);
-        if (parts.length > 0) {
-          address = parts.join(', ');
+        if (geocoded && geocoded.length > 0) {
+          const place = geocoded[0];
+
+          // Format clean area name: near city or village, district (no house / street address)
+          const locality = place.city || place.subregion || place.district || '';
+          const district = place.region || (place.district !== locality ? place.district : '') || '';
+          const areaParts = [locality, district].filter(Boolean);
+          const uniqueAreaParts = [...new Set(areaParts)];
+          if (uniqueAreaParts.length > 0) {
+            areaName = uniqueAreaParts.join(', ');
+          }
+
+          const parts = [
+            place.name,
+            place.street,
+            place.district || place.subregion || place.city,
+            place.region,
+          ].filter(Boolean);
+          if (parts.length > 0) {
+            address = parts.join(', ');
+          }
         }
+      } catch (geoErr) {
+        console.warn('[locationService] Reverse geocode error:', geoErr);
       }
-    } catch (geoErr) {
-      console.warn('[locationService] Reverse geocode error:', geoErr);
     }
 
-    return {
+    const result = {
       lat,
       lng,
       accuracy,
       address,
       areaName: areaName || address,
-      altitude: pos.coords.altitude || null,
-      speed: pos.coords.speed || null,
-      timestamp: pos.timestamp,
+      altitude: pos?.coords?.altitude || null,
+      speed: pos?.coords?.speed || null,
+      timestamp: pos?.timestamp || Date.now(),
     };
+
+    cachedLatestLocation = result;
+
+    // Asynchronously update user's live location heartbeat in Firestore for Trusted Circle tracking
+    if (auth.currentUser?.uid) {
+      updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        isOnline: true,
+        lastLocation: {
+          latitude: lat,
+          longitude: lng,
+          speed: pos?.coords?.speed ?? null,
+          heading: pos?.coords?.heading ?? null,
+          isMoving: (pos?.coords?.speed || 0) > 0.8,
+          updatedAt: serverTimestamp(),
+        },
+      }).catch(() => {});
+    }
+
+    return result;
   } catch (error) {
     console.warn('[locationService] getCurrentCoordinates error, using fallback:', error);
-    return {
+    const fallback = cachedLatestLocation || {
       lat: DEFAULT_COORDS.latitude,
       lng: DEFAULT_COORDS.longitude,
       accuracy: null,
       address: DEFAULT_COORDS.address,
       areaName: 'Colombo, Western Province',
     };
+    return fallback;
   }
 }
 
@@ -167,6 +215,9 @@ export async function getCurrentCoordinates() {
  * Reverse geocodes given lat/lng to readable address
  */
 export async function reverseGeocodeLocation(lat, lng) {
+  if (Platform.OS === 'web') {
+    return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  }
   try {
     const geocoded = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
     if (geocoded && geocoded.length > 0) {

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import {
   doc,
   updateDoc,
@@ -133,6 +134,7 @@ const detailedGeocodeCache = new Map();
 
 export async function resolveFullDetailedAddress(lat, lon) {
   if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (Platform.OS === 'web') return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
   if (detailedGeocodeCache.has(key)) return detailedGeocodeCache.get(key);
 
@@ -171,6 +173,7 @@ const geocodeCache = new Map();
 
 export async function resolveReadableAddress(lat, lon) {
   if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (Platform.OS === 'web') return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
   if (geocodeCache.has(key)) return geocodeCache.get(key);
 

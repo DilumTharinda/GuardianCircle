@@ -26,6 +26,7 @@ export const ROUTES = {
   START_JOURNEY: 'StartJourney',
   JOURNEY_ACTIVE: 'JourneyActive',
   TRUSTED_CIRCLE: 'TrustedCircle',
+  CIRCLE_CHAT: 'CircleChat',
   UNSAFE_REPORT: 'UnsafeReport',
 
   // CircleFind sub-screens (Unified recovery section)

@@ -145,18 +145,22 @@ export default function CircleFindReportScreen({ navigation }) {
       }
       const gh = ngeohash.encode(coords.latitude, coords.longitude);
       let addressLabel = 'Nearby Location';
-      try {
-        const rev = await Location.reverseGeocodeAsync({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-        });
-        if (rev && rev[0]) {
-          const item = rev[0];
-          const locality = item.city || item.subregion || item.name || '';
-          const district = item.district || item.region || '';
-          addressLabel = [locality, district].filter(Boolean).join(', ') || 'Nearby Location';
-        }
-      } catch (_) {}
+      if (Platform.OS !== 'web') {
+        try {
+          const rev = await Location.reverseGeocodeAsync({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          });
+          if (rev && rev[0]) {
+            const item = rev[0];
+            const locality = item.city || item.subregion || item.name || '';
+            const district = item.district || item.region || '';
+            addressLabel = [locality, district].filter(Boolean).join(', ') || 'Nearby Location';
+          }
+        } catch (_) {}
+      } else {
+        addressLabel = `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
+      }
 
       setLocation({
         latitude: coords.latitude,

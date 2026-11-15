@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './firebase';
+import { triggerLocalNotification } from './notificationService';
 
 const LOCAL_READ_NOTIFS_KEY = '@guardiancircle_read_notifications';
 
@@ -63,6 +64,8 @@ export function subscribeToPersonalNotifications(uid, onUpdate) {
   const notifRef = collection(db, 'users', uid, 'notifications');
   const q = query(notifRef, orderBy('createdAt', 'desc'), limit(30));
 
+  let initialLoad = true;
+
   return onSnapshot(
     q,
     async (snap) => {
@@ -77,6 +80,23 @@ export function subscribeToPersonalNotifications(uid, onUpdate) {
           isPersonal: true,
         };
       });
+
+      // Trigger device push banner for newly arrived notifications
+      if (!initialLoad) {
+        snap.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const newNotif = change.doc.data();
+            if (newNotif && newNotif.title && !newNotif.read) {
+              triggerLocalNotification({
+                title: newNotif.title,
+                body: newNotif.body || '',
+                data: newNotif.data || {},
+              });
+            }
+          }
+        });
+      }
+      initialLoad = false;
       onUpdate(list);
     },
     (err) => {
@@ -126,6 +146,40 @@ export function subscribeToBroadcastNotifications(userRole, onUpdate) {
       onUpdate([]);
     }
   );
+}
+
+/**
+ * Alias helper for sending personal notifications
+ */
+export async function sendPersonalNotification({
+  targetUid,
+  title,
+  body = '',
+  message = '',
+  type = 'system',
+  category = 'system',
+  priority = 'normal',
+  senderUid = null,
+  circleId = null,
+  circleName = null,
+  inviteId = null,
+  data = {},
+}) {
+  return dispatchPersonalNotification(targetUid, {
+    title,
+    body: body || message,
+    category: type || category,
+    priority,
+    data: {
+      ...data,
+      type: type || category,
+      senderUid,
+      circleId,
+      circleName,
+      inviteId,
+    },
+    linkRoute: 'TrustedCircle',
+  });
 }
 
 /**
@@ -249,6 +303,46 @@ export async function markAllNotificationsAsRead(uid, allNotifList = []) {
       }
     }
   }
+}
+
+/**
+ * Notify all active circle members except the sender.
+ */
+export async function notifyCircleMembers({
+  circleId,
+  circleName,
+  senderUid,
+  title,
+  body,
+  type = 'CIRCLE_MESSAGE', // 'CIRCLE_MESSAGE' | 'CIRCLE_MEMBER_JOINED' | 'CIRCLE_UPDATE'
+  memberUids = [],
+  linkRoute = null,
+  linkParams = {},
+}) {
+  if (!circleId || !title || !Array.isArray(memberUids)) return;
+
+  const recipients = memberUids.filter((uid) => uid && uid !== senderUid);
+  if (recipients.length === 0) return;
+
+  const promises = recipients.map((targetUid) =>
+    dispatchPersonalNotification({
+      targetUid,
+      title,
+      body,
+      category: 'trusted_circle',
+      priority: 'normal',
+      data: {
+        circleId,
+        circleName,
+        type,
+        ...(linkRoute ? { screen: linkRoute, params: linkParams } : {}),
+      },
+      linkRoute,
+      linkParams,
+    })
+  );
+
+  await Promise.allSettled(promises);
 }
 
 /**
