@@ -10,8 +10,10 @@ import {
   TextInput,
   Modal,
   Platform,
+  Image,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -24,16 +26,20 @@ import {
   removeCircleMember,
   acceptCircleInvitation,
   declineCircleInvitation,
+  updateCircleDetails,
 } from '../../services/trustedCircleGroupService';
+import { uploadImageToCloudinary } from '../../services/imageUploadService';
 import CircleInviteModal from '../../components/trusted/CircleInviteModal';
+import ThemeToggle from '../../components/ThemeToggle';
 import { ROUTES } from '../../constants/routes';
 
 export default function TrustedCircleScreen({ navigation, route }) {
   const { user, userProfile } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const [circles, setCircles] = useState([]);
   const [selectedCircleId, setSelectedCircleId] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'detail'
   const [loading, setLoading] = useState(true);
 
   // Pending invites for the current user
@@ -47,6 +53,60 @@ export default function TrustedCircleScreen({ navigation, route }) {
   const [creating, setCreating] = useState(false);
 
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
+
+  // Circle Edit (Rename & Photo) State
+  const [renameModalVisible, setRenameModalVisible] = useState(false);
+  const [renameInput, setRenameInput] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const activeCircle = circles.find((c) => c.id === selectedCircleId) || circles[0];
+  const isAdmin = activeCircle?.createdBy === user?.uid || (activeCircle?.adminUids || []).includes(user?.uid);
+
+  // Configure navigation header options: Keep dark/light mode icon in same position, add + button left to it
+  useEffect(() => {
+    navigation.setOptions({
+      headerTitle: viewMode === 'detail' && activeCircle ? activeCircle.name : 'Trusted Circle',
+      headerLeft:
+        viewMode === 'detail'
+          ? () => (
+              <TouchableOpacity
+                onPress={() => setViewMode('list')}
+                style={{ marginLeft: 14, padding: 4 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-back" size={24} color="#FFF" />
+              </TouchableOpacity>
+            )
+          : undefined,
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* + New Circle Button */}
+          <TouchableOpacity
+            onPress={() => setCreateModalVisible(true)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 16,
+              marginRight: 10,
+              borderWidth: 1,
+              borderColor: 'rgba(255, 255, 255, 0.35)',
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={18} color="#FFF" style={{ marginRight: 2 }} />
+            <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 13 }}>New Circle</Text>
+          </TouchableOpacity>
+
+          {/* Dark / Light Mode Toggle in its exact original header position */}
+          <ThemeToggle style={{ marginRight: 15 }} iconColor="#fff" />
+        </View>
+      ),
+    });
+  }, [navigation, viewMode, activeCircle?.name]);
 
   // 1. Subscribe to User's Trusted Circles in real time
   useEffect(() => {
@@ -142,9 +202,6 @@ export default function TrustedCircleScreen({ navigation, route }) {
     }
   };
 
-  const activeCircle = circles.find((c) => c.id === selectedCircleId) || circles[0];
-  const isAdmin = activeCircle?.createdBy === user?.uid || (activeCircle?.adminUids || []).includes(user?.uid);
-
   // Handle Create Circle
   const handleCreateCircle = async () => {
     if (!circleNameInput.trim()) {
@@ -182,6 +239,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
       async () => {
         try {
           await deleteCircle(circle.id, user.uid);
+          setViewMode('list');
           alertOrPrompt('Deleted', `"${circle.name}" has been deleted.`);
         } catch (e) {
           alertOrPrompt('Error', e.message);
@@ -198,6 +256,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
       async () => {
         try {
           await leaveCircle(circle.id, user.uid);
+          setViewMode('list');
           alertOrPrompt('Left Circle', `You have left "${circle.name}".`);
         } catch (e) {
           alertOrPrompt('Error', e.message);
@@ -220,6 +279,50 @@ export default function TrustedCircleScreen({ navigation, route }) {
         }
       }
     );
+  };
+
+  // Handle Rename Circle
+  const handleRenameCircle = async () => {
+    if (!renameInput.trim()) {
+      alertOrPrompt('Required', 'Please enter a valid circle name.');
+      return;
+    }
+    if (!activeCircle) return;
+    setRenaming(true);
+    try {
+      await updateCircleDetails(activeCircle.id, { name: renameInput.trim() }, user.uid);
+      setRenameModalVisible(false);
+      alertOrPrompt('Success', `Circle renamed to "${renameInput.trim()}".`);
+    } catch (e) {
+      alertOrPrompt('Error', e.message || 'Failed to rename circle.');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  // Handle Pick and Crop / Resize Circle Group Image
+  const handlePickCircleImage = async () => {
+    if (!activeCircle) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true, // Enables native crop / resize UI
+        aspect: [1, 1], // Square 1:1 crop for circle group avatar
+        quality: 0.75,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const localUri = result.assets[0].uri;
+        setUploadingImage(true);
+        const remoteUrl = await uploadImageToCloudinary(localUri);
+        await updateCircleDetails(activeCircle.id, { photoURL: remoteUrl }, user.uid);
+        alertOrPrompt('Success', 'Circle group image updated successfully!');
+      }
+    } catch (e) {
+      alertOrPrompt('Upload Error', e.message || 'Failed to upload group image.');
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   // Helper for cross-platform confirmation
@@ -286,27 +389,6 @@ export default function TrustedCircleScreen({ navigation, route }) {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background || '#F8F9FA' }]}>
-      {/* Header Bar */}
-      <View style={[styles.header, { backgroundColor: colors.surfaceCard || '#FFFFFF' }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 8 }}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Trusted Circles</Text>
-          <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
-            Family, friends & trusted contacts
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.newCircleBtn}
-          onPress={() => setCreateModalVisible(true)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={18} color="#FFF" style={{ marginRight: 4 }} />
-          <Text style={styles.newCircleText}>New Circle</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Pending Invitations Banner / Section */}
       {allPending.length > 0 && (
         <View style={styles.pendingSection}>
@@ -318,10 +400,10 @@ export default function TrustedCircleScreen({ navigation, route }) {
             return (
               <View
                 key={itemKey}
-                style={[styles.pendingCard, { backgroundColor: colors.surfaceCard || '#FFF' }]}
+                style={[styles.pendingCard, { backgroundColor: colors.surface || colors.card || '#FFF' }]}
               >
-                <View style={styles.pendingIconWrap}>
-                  <Ionicons name="mail-unread" size={24} color="#00897B" />
+                <View style={[styles.pendingIconWrap, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+                  <Ionicons name="mail-unread" size={24} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
                 </View>
                 <View style={{ flex: 1, marginHorizontal: 10 }}>
                   <Text style={[styles.pendingTitle, { color: colors.textPrimary }]}>
@@ -348,12 +430,12 @@ export default function TrustedCircleScreen({ navigation, route }) {
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.declineBtn}
+                    style={[styles.declineBtn, { backgroundColor: isDark ? '#3D1A1A' : '#FFEBEE' }]}
                     disabled={acceptingInviteId === inv.circleId}
                     onPress={() => handleDeclineInvite(inv)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.declineBtnText}>Decline</Text>
+                    <Text style={[styles.declineBtnText, { color: isDark ? '#EF5350' : '#D32F2F' }]}>Decline</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -370,8 +452,8 @@ export default function TrustedCircleScreen({ navigation, route }) {
       ) : circles.length === 0 ? (
         /* Empty State */
         <View style={styles.emptyCard}>
-          <View style={styles.shieldIconBig}>
-            <MaterialIcons name="groups" size={48} color="#00897B" />
+          <View style={[styles.shieldIconBig, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+            <MaterialIcons name="groups" size={48} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Trusted Circles Yet</Text>
           <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
@@ -387,65 +469,189 @@ export default function TrustedCircleScreen({ navigation, route }) {
             <Text style={styles.createFirstText}>Create Trusted Circle</Text>
           </TouchableOpacity>
         </View>
+      ) : viewMode === 'list' ? (
+        /* WhatsApp-Style Circles/Groups List */
+        <ScrollView
+          contentContainerStyle={styles.whatsappListContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {circles.map((circle) => {
+            const isUserAdmin = circle.createdBy === user?.uid || (circle.adminUids || []).includes(user?.uid);
+            const members = circle.members || [];
+            const memberCount = members.length || (circle.memberUids || []).length || 1;
+            
+            // Build WhatsApp-like member preview subtitle (e.g. "You, John, Sarah")
+            let previewText = '';
+            if (members.length > 0) {
+              const names = members.map((m) =>
+                m.uid === user?.uid ? 'You' : m.displayName || m.username || 'Member'
+              );
+              // Put 'You' first if in list
+              if (names.includes('You')) {
+                names.splice(names.indexOf('You'), 1);
+                names.unshift('You');
+              }
+              previewText = names.slice(0, 4).join(', ');
+              if (names.length > 4) {
+                previewText += ` +${names.length - 4} more`;
+              }
+            } else if (circle.createdByName) {
+              previewText = `Created by ${circle.createdByName}`;
+            } else {
+              previewText = `${memberCount} member${memberCount > 1 ? 's' : ''}`;
+            }
+
+            return (
+              <TouchableOpacity
+                key={circle.id}
+                style={[
+                  styles.waItemRow,
+                  {
+                    backgroundColor: colors.surface || colors.card || '#FFFFFF',
+                    borderBottomColor: colors.border || '#2A3D2A',
+                  },
+                ]}
+                onPress={() => {
+                  setSelectedCircleId(circle.id);
+                  setViewMode('detail');
+                }}
+                activeOpacity={0.7}
+              >
+                {/* WhatsApp Group Avatar Icon */}
+                {circle.photoURL ? (
+                  <Image source={{ uri: circle.photoURL }} style={styles.waAvatarImg} />
+                ) : (
+                  <View style={[styles.waAvatarContainer, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+                    <MaterialIcons name="groups" size={28} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
+                  </View>
+                )}
+
+                {/* Main Content Area */}
+                <View style={styles.waDetailsCol}>
+                  <View style={styles.waTopRow}>
+                    <Text
+                      style={[styles.waCircleName, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
+                      {circle.name}
+                    </Text>
+                    
+                    {/* Admin Tag or Member Pill */}
+                    {isUserAdmin ? (
+                      <View style={[styles.waAdminBadge, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+                        <Text style={[styles.waAdminBadgeText, { color: isDark ? colors.accentGreen || '#00E676' : '#00796B' }]}>Admin</Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.waMemberCountText, { color: colors.textSecondary }]}>
+                        {memberCount} member{memberCount > 1 ? 's' : ''}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={styles.waBottomRow}>
+                    <Text
+                      style={[styles.waSubtitle, { color: colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      {previewText}
+                    </Text>
+
+                    {/* Quick Action Buttons */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {/* Chat in Circle Button */}
+                      <TouchableOpacity
+                        style={[styles.waQuickChatBtn, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          navigation.navigate(ROUTES.CIRCLE_CHAT, {
+                            circleId: circle.id,
+                            circleName: circle.name,
+                            circlePhotoURL: circle.photoURL || null,
+                            members: circle.members || [],
+                          });
+                        }}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="chatbubble-ellipses" size={17} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
+                      </TouchableOpacity>
+
+                      {/* Quick Track on Map Icon Button */}
+                      <TouchableOpacity
+                        style={[styles.waQuickMapBtn, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          navigation.navigate('Main', {
+                            screen: ROUTES.MAP,
+                            params: {
+                              selectedCircleId: circle.id,
+                              selectedCircleName: circle.name,
+                              memberUids: circle.memberUids || [],
+                            },
+                          });
+                        }}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="location-sharp" size={17} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       ) : (
+        /* Detailed Circle Management View (Selected Circle) */
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Horizontal Circle Selector Tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-            {circles.map((c) => {
-              const isSelected = c.id === activeCircle?.id;
-              const isUserAdmin = c.createdBy === user?.uid;
-              return (
+          {activeCircle && (
+            <View style={[styles.card, { backgroundColor: colors.surface || colors.card || '#FFFFFF', borderColor: isDark ? colors.border || '#2A3D2A' : 'transparent', borderWidth: isDark ? 1 : 0 }]}>
+              {/* Card Header & Admin Status */}
+              <View style={styles.cardHeader}>
+                {/* Circle Avatar (Tap to change group image if admin) */}
                 <TouchableOpacity
-                  key={c.id}
-                  style={[
-                    styles.circleTab,
-                    {
-                      backgroundColor: isSelected ? '#00897B' : colors.surfaceCard || '#FFF',
-                      borderColor: isSelected ? '#00897B' : colors.border || '#DDD',
-                    },
-                  ]}
-                  onPress={() => setSelectedCircleId(c.id)}
+                  style={styles.circlePhotoWrapper}
+                  onPress={isAdmin ? handlePickCircleImage : undefined}
+                  disabled={!isAdmin || uploadingImage}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[
-                      styles.circleTabText,
-                      { color: isSelected ? '#FFF' : colors.textPrimary },
-                    ]}
-                  >
-                    {c.name}
-                  </Text>
-                  {isUserAdmin && (
-                    <View
-                      style={[
-                        styles.adminMiniBadge,
-                        { backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : '#E0F2F1' },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.adminMiniText,
-                          { color: isSelected ? '#FFF' : '#00796B' },
-                        ]}
-                      >
-                        Admin
-                      </Text>
+                  {uploadingImage ? (
+                    <View style={[styles.circlePhotoDefault, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+                      <ActivityIndicator size="small" color="#00897B" />
+                    </View>
+                  ) : activeCircle.photoURL ? (
+                    <Image source={{ uri: activeCircle.photoURL }} style={styles.circlePhotoImg} />
+                  ) : (
+                    <View style={[styles.circlePhotoDefault, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+                      <MaterialIcons name="groups" size={32} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
+                    </View>
+                  )}
+                  {isAdmin && (
+                    <View style={styles.cameraPill}>
+                      <Ionicons name="camera" size={12} color="#FFF" />
                     </View>
                   )}
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
 
-          {/* Active Circle Card */}
-          {activeCircle && (
-            <View style={[styles.card, { backgroundColor: colors.surfaceCard || '#FFFFFF' }]}>
-              {/* Card Header & Admin Status */}
-              <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
-                    {activeCircle.name}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+                      {activeCircle.name}
+                    </Text>
+                    {isAdmin && (
+                      <TouchableOpacity
+                        style={[styles.renamePencilBtn, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}
+                        onPress={() => {
+                          setRenameInput(activeCircle.name || '');
+                          setRenameModalVisible(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="pencil" size={15} color={isDark ? colors.darkGreenLight || '#0A9B8D' : '#00897B'} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
                     {isAdmin ? 'You are the Circle Admin' : `Created by ${activeCircle.createdByName || 'Admin'}`} •{' '}
                     {(activeCircle.members || []).length} Member{(activeCircle.members || []).length > 1 ? 's' : ''}
@@ -454,48 +660,64 @@ export default function TrustedCircleScreen({ navigation, route }) {
 
                 {isAdmin ? (
                   <TouchableOpacity
-                    style={styles.deleteCircleBtn}
+                    style={[styles.deleteCircleBtn, { backgroundColor: isDark ? '#3D1A1A' : '#FFEBEE' }]}
                     onPress={() => handleDeleteCircle(activeCircle)}
                   >
-                    <Ionicons name="trash-outline" size={18} color="#D32F2F" />
+                    <Ionicons name="trash-outline" size={18} color={isDark ? '#EF5350' : '#D32F2F'} />
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
-                    style={styles.leaveCircleBtn}
+                    style={[styles.leaveCircleBtn, { backgroundColor: isDark ? '#3D2614' : '#FFF3E0' }]}
                     onPress={() => handleLeaveCircle(activeCircle)}
                   >
-                    <Ionicons name="exit-outline" size={18} color="#E65100" />
-                    <Text style={styles.leaveText}>Leave</Text>
+                    <Ionicons name="exit-outline" size={18} color={isDark ? '#FFA726' : '#E65100'} />
+                    <Text style={[styles.leaveText, { color: isDark ? '#FFA726' : '#E65100' }]}>Leave</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
-              {/* Action Buttons Row: View on Map & Invite Member */}
+              {/* Action Buttons Row: View on Map, Chat & Invite Member */}
               <View style={styles.actionRow}>
                 <TouchableOpacity
                   style={styles.viewOnMapBtn}
                   onPress={handleTrackCircleOnMap}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="map" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.viewOnMapText}>View Circle on Map</Text>
+                  <Ionicons name="map" size={16} color="#FFF" style={{ marginRight: 5 }} />
+                  <Text style={styles.viewOnMapText}>Live Map</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.circleChatBtn}
+                  onPress={() => {
+                    navigation.navigate(ROUTES.CIRCLE_CHAT, {
+                      circleId: activeCircle.id,
+                      circleName: activeCircle.name,
+                      circlePhotoURL: activeCircle.photoURL || null,
+                      members: activeCircle.members || [],
+                    });
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="chatbubbles" size={16} color="#FFF" style={{ marginRight: 5 }} />
+                  <Text style={styles.circleChatBtnText}>Chat</Text>
                 </TouchableOpacity>
 
                 {isAdmin && (
                   <TouchableOpacity
-                    style={styles.inviteBtn}
+                    style={[styles.inviteBtn, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}
                     onPress={() => setInviteModalVisible(true)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="person-add" size={16} color="#00897B" style={{ marginRight: 6 }} />
-                    <Text style={styles.inviteBtnText}>Invite</Text>
+                    <Ionicons name="person-add" size={15} color={isDark ? colors.accentGreen || '#00E676' : '#00897B'} style={{ marginRight: 4 }} />
+                    <Text style={[styles.inviteBtnText, { color: isDark ? colors.accentGreen || '#00E676' : '#00897B' }]}>Invite</Text>
                   </TouchableOpacity>
                 )}
               </View>
 
               {/* Members List Section */}
               <View style={styles.membersSection}>
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+                <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
                   Circle Members
                 </Text>
 
@@ -515,19 +737,27 @@ export default function TrustedCircleScreen({ navigation, route }) {
                     const isMemberAdmin =
                       member.role === 'admin' || member.uid === activeCircle.createdBy;
 
+                    const memberPhoto =
+                      (isMe ? userProfile?.photoURL || user?.photoURL : null) ||
+                      member.photoURL;
+
                     return (
                       <View
                         key={member.uid ? `member-${member.uid}` : `member-idx-${mIdx}`}
                         style={[
                           styles.memberItem,
-                          { borderBottomColor: colors.border || '#F0F0F0' },
+                          { borderBottomColor: colors.border || '#2A3D2A' },
                         ]}
                       >
-                        <View style={styles.avatar}>
-                          <Text style={styles.avatarText}>
-                            {(member.displayName || 'U')[0].toUpperCase()}
-                          </Text>
-                        </View>
+                        {memberPhoto ? (
+                          <Image source={{ uri: memberPhoto }} style={styles.avatarImage} />
+                        ) : (
+                          <View style={[styles.avatar, { backgroundColor: isDark ? colors.darkGreenMid || '#06756A' : '#00897B' }]}>
+                            <Text style={styles.avatarText}>
+                              {(member.displayName || 'U')[0].toUpperCase()}
+                            </Text>
+                          </View>
+                        )}
 
                         <View style={{ flex: 1, marginLeft: 12 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -547,17 +777,17 @@ export default function TrustedCircleScreen({ navigation, route }) {
                         </View>
 
                         {isMemberAdmin ? (
-                          <View style={styles.adminBadge}>
-                            <Text style={styles.adminBadgeText}>Admin</Text>
+                          <View style={[styles.adminBadge, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}>
+                            <Text style={[styles.adminBadgeText, { color: isDark ? colors.accentGreen || '#00E676' : '#00796B' }]}>Admin</Text>
                           </View>
                         ) : (
                           isAdmin &&
                           !isMe && (
                             <TouchableOpacity
-                              style={styles.removeBtn}
+                              style={[styles.removeBtn, { backgroundColor: isDark ? '#3D1A1A' : '#FFEBEE' }]}
                               onPress={() => handleRemoveMember(member)}
                             >
-                              <Ionicons name="close" size={16} color="#D32F2F" />
+                              <Ionicons name="close" size={16} color={isDark ? '#EF5350' : '#D32F2F'} />
                             </TouchableOpacity>
                           )
                         )}
@@ -569,7 +799,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
 
               {/* Pending Invitations Section (Admin Only) */}
               {isAdmin && (activeCircle.pendingInvites || []).length > 0 && (
-                <View style={styles.circlePendingSection}>
+                <View style={[styles.circlePendingSection, { borderTopColor: colors.border || '#2A3D2A' }]}>
                   <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
                     Pending Invitations ({(activeCircle.pendingInvites || []).length})
                   </Text>
@@ -604,7 +834,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
         onRequestClose={() => setCreateModalVisible(false)}
       >
         <View style={styles.modalBg}>
-          <View style={[styles.dialogCard, { backgroundColor: colors.surfaceCard || '#FFFFFF' }]}>
+          <View style={[styles.dialogCard, { backgroundColor: colors.surface || colors.card || '#FFFFFF' }]}>
             <Text style={[styles.dialogTitle, { color: colors.textPrimary }]}>Create Trusted Circle</Text>
             <Text style={[styles.dialogSub, { color: colors.textSecondary }]}>
               Give your new circle a recognizable name (e.g. "Family", "Close Friends", "Office Team").
@@ -639,6 +869,56 @@ export default function TrustedCircleScreen({ navigation, route }) {
                   <ActivityIndicator size="small" color="#FFF" />
                 ) : (
                   <Text style={styles.confirmBtnText}>Create Circle</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Rename Circle Modal */}
+      <Modal
+        visible={renameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenameModalVisible(false)}
+      >
+        <View style={styles.modalBg}>
+          <View style={[styles.dialogCard, { backgroundColor: colors.surface || colors.card || '#FFFFFF' }]}>
+            <Text style={[styles.dialogTitle, { color: colors.textPrimary }]}>Rename Trusted Circle</Text>
+            <Text style={[styles.dialogSub, { color: colors.textSecondary }]}>
+              Enter a new name for "{activeCircle?.name}".
+            </Text>
+
+            <TextInput
+              style={[
+                styles.dialogInput,
+                { color: colors.textPrimary, borderColor: colors.border || '#DDD' },
+              ]}
+              placeholder="Circle name"
+              placeholderTextColor="#999"
+              value={renameInput}
+              onChangeText={setRenameInput}
+              autoFocus
+            />
+
+            <View style={styles.dialogActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setRenameModalVisible(false)}
+                disabled={renaming}
+              >
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, renaming && { opacity: 0.6 }]}
+                onPress={handleRenameCircle}
+                disabled={renaming}
+              >
+                {renaming ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.confirmBtnText}>Save</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -749,6 +1029,101 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
+  whatsappListContent: {
+    paddingVertical: 8,
+  },
+  waItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 0.8,
+  },
+  waAvatarContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#E0F2F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  waAvatarImg: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    marginRight: 14,
+    backgroundColor: '#E0E0E0',
+  },
+  waDetailsCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  waTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  waCircleName: {
+    fontSize: 16,
+    fontWeight: '700',
+    flex: 1,
+    marginRight: 8,
+  },
+  waMemberCountText: {
+    fontSize: 12,
+  },
+  waAdminBadge: {
+    backgroundColor: '#E0F2F1',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  waAdminBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#00796B',
+  },
+  waBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  waSubtitle: {
+    fontSize: 13,
+    flex: 1,
+    marginRight: 10,
+  },
+  waQuickChatBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#E0F2F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  waQuickMapBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#E0F2F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backToListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  backToListHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#00897B',
+    marginLeft: 6,
+  },
   tabsScroll: {
     marginBottom: 14,
   },
@@ -786,16 +1161,52 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 16,
   },
+  circlePhotoWrapper: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  circlePhotoImg: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E0E0E0',
+  },
+  circlePhotoDefault: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E0F2F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraPill: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#00897B',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  renamePencilBtn: {
+    marginLeft: 8,
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: '#E0F2F1',
+  },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   cardSub: {
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
   },
   deleteCircleBtn: {
@@ -828,14 +1239,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#00897B',
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderRadius: 10,
-    marginRight: 10,
+    marginRight: 8,
   },
   viewOnMapText: {
     color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 13,
+  },
+  circleChatBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0288D1',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  circleChatBtnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 13,
   },
   inviteBtn: {
     flexDirection: 'row',
@@ -874,6 +1300,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#00897B',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E0E0E0',
   },
   avatarText: {
     color: '#FFF',

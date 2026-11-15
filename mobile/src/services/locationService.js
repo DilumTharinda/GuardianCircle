@@ -185,6 +185,7 @@ export async function getCurrentCoordinates() {
     // Asynchronously update user's live location heartbeat in Firestore for Trusted Circle tracking
     if (auth.currentUser?.uid) {
       updateDoc(doc(db, 'users', auth.currentUser.uid), {
+        isOnline: true,
         lastLocation: {
           latitude: lat,
           longitude: lng,

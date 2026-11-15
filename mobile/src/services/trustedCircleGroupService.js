@@ -6,6 +6,8 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  addDoc,
+  orderBy,
   query,
   where,
   onSnapshot,
@@ -14,7 +16,11 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { sendPersonalNotification } from './notificationCenterService';
+import {
+  sendPersonalNotification,
+  notifyCircleMembers,
+} from './notificationCenterService';
+import { ROUTES } from '../constants/routes';
 import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 
 export const TRUSTED_CIRCLES_COLLECTION = 'trustedCircles';
@@ -48,6 +54,7 @@ export async function createTrustedCircle(creatorUser, circleName) {
     adminUids: [creatorUser.uid],
     memberUids: [creatorUser.uid],
     members: [adminMember],
+    chatMessages: [],
     pendingInvites: [],
     settings: {
       shareLiveLocation: true,
@@ -308,17 +315,18 @@ export async function acceptCircleInvitation(circleId, inviteId, currentUser) {
     updatedAt: serverTimestamp(),
   });
 
-  // Notify circle admin
-  if (circle.createdBy && circle.createdBy !== currentUser.uid) {
-    sendPersonalNotification({
-      targetUid: circle.createdBy,
-      title: '✅ Circle Member Joined',
-      body: `${currentUser.displayName || 'User'} has accepted your invitation to "${circle.name}".`,
-      type: 'TRUSTED_CIRCLE_JOINED',
-      senderUid: currentUser.uid,
-      circleId,
-    }).catch(() => {});
-  }
+  // Notify circle admin and members
+  notifyCircleMembers({
+    circleId,
+    circleName: circle.name || 'Trusted Circle',
+    senderUid: currentUser.uid,
+    title: `👋 ${circle.name || 'Trusted Circle'}`,
+    body: `${currentUser.displayName || 'A new user'} joined the circle.`,
+    type: 'CIRCLE_MEMBER_JOINED',
+    memberUids: Array.from(new Set([...(circle.memberUids || []), currentUser.uid])),
+    linkRoute: ROUTES.TRUSTED_CIRCLE,
+    linkParams: { circleId },
+  }).catch(() => {});
 }
 
 /**
@@ -366,6 +374,16 @@ export async function removeCircleMember(circleId, memberUid, adminUid) {
     members: updatedMembers,
     updatedAt: serverTimestamp(),
   });
+
+  // Notify the removed member
+  sendPersonalNotification({
+    targetUid: memberUid,
+    title: '⚠️ Removed from Circle',
+    body: `You were removed from "${circle.name}".`,
+    type: 'TRUSTED_CIRCLE_UPDATE',
+    senderUid: adminUid,
+    circleId,
+  }).catch(() => {});
 }
 
 /**
@@ -389,6 +407,19 @@ export async function leaveCircle(circleId, userUid) {
     members: updatedMembers,
     updatedAt: serverTimestamp(),
   });
+
+  // Notify admin that member left
+  if (circle.createdBy && circle.createdBy !== userUid) {
+    const leaverName = currentMembers.find((m) => m.uid === userUid)?.displayName || 'A member';
+    sendPersonalNotification({
+      targetUid: circle.createdBy,
+      title: '🚪 Member Left Circle',
+      body: `${leaverName} has left "${circle.name}".`,
+      type: 'TRUSTED_CIRCLE_UPDATE',
+      senderUid: userUid,
+      circleId,
+    }).catch(() => {});
+  }
 }
 
 /**
@@ -511,5 +542,144 @@ export async function getAllUserCircleMemberUids(uid) {
     console.warn('[trustedCircleGroupService] getAllUserCircleMemberUids error:', e);
     return [];
   }
+}
+
+/**
+ * Update Trusted Circle metadata: name and/or photoURL.
+ */
+export async function updateCircleDetails(circleId, updates, userUid) {
+  if (!circleId) throw new Error('Circle ID required.');
+  const circleRef = doc(db, TRUSTED_CIRCLES_COLLECTION, circleId);
+  const dataToUpdate = {
+    ...updates,
+    updatedAt: serverTimestamp(),
+  };
+  await updateDoc(circleRef, dataToUpdate);
+
+  logActivity({
+    action: AUDIT_ACTIONS.PROFILE_UPDATE,
+    performedBy: userUid,
+    targetUid: circleId,
+    note: `Updated circle details: ${Object.keys(updates).join(', ')}`,
+  }).catch(() => {});
+
+  // Notify members about circle name or profile image update
+  getDoc(circleRef).then((snap) => {
+    if (snap.exists()) {
+      const cData = snap.data();
+      const memberUids = cData.memberUids || [];
+      const cName = updates.name || cData.name || 'Trusted Circle';
+      if (updates.name) {
+        notifyCircleMembers({
+          circleId,
+          circleName: cName,
+          senderUid: userUid,
+          title: `📝 ${cName}`,
+          body: `Circle name was updated to "${updates.name}".`,
+          type: 'CIRCLE_UPDATE',
+          memberUids,
+          linkRoute: ROUTES.TRUSTED_CIRCLE,
+          linkParams: { circleId },
+        }).catch(() => {});
+      } else if (updates.photoURL) {
+        notifyCircleMembers({
+          circleId,
+          circleName: cName,
+          senderUid: userUid,
+          title: `🖼️ ${cName}`,
+          body: `Circle group image was updated.`,
+          type: 'CIRCLE_UPDATE',
+          memberUids,
+          linkRoute: ROUTES.TRUSTED_CIRCLE,
+          linkParams: { circleId },
+        }).catch(() => {});
+      }
+    }
+  }).catch(() => {});
+}
+
+/**
+ * Send a chat message in a Trusted Circle group chat.
+ * Appends message to chatMessages array directly on the circle document,
+ * fully compliant with deployed Firestore rules (allow update: if isAuthenticated()).
+ */
+export async function sendCircleMessage(circleId, senderUser, text) {
+  if (!circleId || !senderUser?.uid || !text?.trim()) return;
+  const circleRef = doc(db, TRUSTED_CIRCLES_COLLECTION, circleId);
+
+  const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const newMsg = {
+    id: messageId,
+    text: text.trim(),
+    senderId: senderUser.uid,
+    senderName: senderUser.displayName || 'Member',
+    senderPhotoURL: senderUser.photoURL || null,
+    createdAt: new Date().toISOString(),
+  };
+
+  await updateDoc(circleRef, {
+    chatMessages: arrayUnion(newMsg),
+    lastMessage: {
+      text: text.trim(),
+      senderName: senderUser.displayName || 'Member',
+      senderId: senderUser.uid,
+      sentAt: new Date().toISOString(),
+    },
+    updatedAt: serverTimestamp(),
+  });
+
+  // Notify other circle members in real-time
+  getDoc(circleRef).then((snap) => {
+    if (snap.exists()) {
+      const cData = snap.data();
+      notifyCircleMembers({
+        circleId,
+        circleName: cData.name || 'Trusted Circle',
+        senderUid: senderUser.uid,
+        title: `💬 ${cData.name || 'Trusted Circle'}`,
+        body: `${senderUser.displayName || 'Member'}: ${text.trim()}`,
+        type: 'CIRCLE_MESSAGE',
+        memberUids: cData.memberUids || [],
+        linkRoute: ROUTES.CIRCLE_CHAT,
+        linkParams: {
+          circleId,
+          circleName: cData.name || 'Trusted Circle',
+          circlePhotoURL: cData.photoURL || null,
+        },
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+}
+
+/**
+ * Subscribe to real-time messages in a Trusted Circle group chat.
+ * Listens to circle doc updates for real-time delivery without subcollection permission blocks.
+ */
+export function subscribeCircleMessages(circleId, onUpdate) {
+  if (!circleId) return () => {};
+  const circleRef = doc(db, TRUSTED_CIRCLES_COLLECTION, circleId);
+
+  return onSnapshot(
+    circleRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const msgs = Array.isArray(data.chatMessages) ? data.chatMessages : [];
+        // Sort chronologically
+        const sorted = [...msgs].sort((a, b) => {
+          const tA = new Date(a.createdAt || 0).getTime();
+          const tB = new Date(b.createdAt || 0).getTime();
+          return tA - tB;
+        });
+        onUpdate(sorted);
+      } else {
+        onUpdate([]);
+      }
+    },
+    (err) => {
+      console.warn('[trustedCircleGroupService] subscribeCircleMessages error:', err?.message || err);
+      onUpdate([]);
+    }
+  );
 }
 

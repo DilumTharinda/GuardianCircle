@@ -54,13 +54,35 @@ const CATEGORY_TO_PREFERENCE_KEY = {
 };
 const ALWAYS_SEND_CATEGORY = 'sos';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
+
+/**
+ * Trigger an immediate local push notification on the device.
+ */
+export async function triggerLocalNotification({ title, body, data = {} }) {
+  if (Platform.OS === 'web') return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data,
+        sound: 'default',
+      },
+      trigger: null, // trigger immediately
+    });
+  } catch (e) {
+    console.warn('[notificationService] triggerLocalNotification error:', e?.message || e);
+  }
+}
 
 /**
  * Requests OS-level notification permission and registers this device

@@ -282,6 +282,14 @@ service cloud.firestore {
         ('adminUids' in resource.data && request.auth.uid in resource.data.adminUids) ||
         isAdmin()
       );
+
+      // ─── Group Chat Messages inside a trusted circle ───────────────
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated();
+        allow update, delete: if isAuthenticated() && (
+          resource.data.senderId == request.auth.uid || isAdmin()
+        );
+      }
     }
 
     match /{document=**} {

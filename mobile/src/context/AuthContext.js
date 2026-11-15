@@ -21,6 +21,7 @@ import { ROLES } from '../constants/roles';
 import { syncUserReportsAuthorName } from '../services/circleFindService';
 import { UsernameService } from '../services/usernameService';
 import { logActivity, AUDIT_ACTIONS } from '../services/auditLogService';
+import { registerForPushNotificationsAsync } from '../services/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let GoogleSignin = null;
@@ -88,6 +89,8 @@ export function AuthProvider({ children }) {
         if (firebaseUser) {
           setUser(firebaseUser);
           await loadUserProfile(firebaseUser.uid);
+          // Register device for notifications & request permissions
+          registerForPushNotificationsAsync(firebaseUser.uid).catch(() => {});
         } else {
           // Check if we have a demo user cached
           const savedDemo = await AsyncStorage.getItem('@demo_parent_user');
@@ -445,6 +448,15 @@ export function AuthProvider({ children }) {
     const currentUid = user?.uid;
     const currentEmail = user?.email;
     const currentRole = userProfile?.role;
+
+    // Mark user offline in Firestore
+    if (currentUid && currentUid !== 'parent_user_default') {
+      try {
+        await updateDoc(doc(db, 'users', currentUid), {
+          isOnline: false,
+        });
+      } catch (_) {}
+    }
 
     // Audit log logout
     if (currentUid) {

@@ -264,7 +264,7 @@ export default function MapScreenWeb({ navigation, route }) {
               You
             </div>
             <div style="width:36px;height:36px;border-radius:18px;background:rgba(255,255,255,0.95);box-shadow:0 2px 8px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;border:2px solid #FFF;">
-              <span style="font-size:18px;">${isMoving ? '🚶' : '🧍'}</span>
+              <span style="font-size:18px;">🚶</span>
             </div>
           </div>
         `;
@@ -334,10 +334,27 @@ export default function MapScreenWeb({ navigation, route }) {
 
     // D. Active Trusted Circle Members Live Tracking (Matching same human icon, yellow color #FFD600, with Display Name on top)
     if (activeCircleTracker && circleMembersLocations.length > 0) {
+      // Ensure blink keyframe is injected once in document head
+      if (typeof document !== 'undefined' && !document.getElementById('circle-member-blink-style')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'circle-member-blink-style';
+        styleEl.textContent = `
+          @keyframes offlineMemberBlink {
+            0%, 100% { opacity: 1.0; }
+            50% { opacity: 0.25; }
+          }
+          .offline-blink-marker {
+            animation: offlineMemberBlink 1.2s infinite ease-in-out;
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+
       circleMembersLocations.forEach((member) => {
         const memberName = member.displayName || 'Member';
+        const blinkClass = !member.isOnline ? 'offline-blink-marker' : '';
         const memberHtml = `
-          <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transform:translateY(-8px);">
+          <div class="${blinkClass}" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transform:translateY(-8px);">
             <div style="background:rgba(0,0,0,0.8);color:#FFD600;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;border:1px solid rgba(255,214,0,0.5);box-shadow:0 1px 4px rgba(0,0,0,0.4);margin-bottom:3px;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis;">
               ${memberName}
             </div>
@@ -349,12 +366,50 @@ export default function MapScreenWeb({ navigation, route }) {
 
         const marker = createMarker({
           position: { lat: member.latitude, lng: member.longitude },
-          title: `👤 ${memberName} (${member.isMoving ? 'Moving' : 'Stationary'})`,
+          title: `👤 ${memberName} (${!member.isOnline ? 'Offline' : (member.isMoving ? 'Moving' : 'Stationary')})`,
           contentHtml: memberHtml,
         });
 
+        const statusText = !member.isOnline
+          ? '⚠️ Offline'
+          : member.isMoving
+          ? '🚶 Walking / In Motion'
+          : '🧍 Stationary';
+
+        const statusBg = member.isOnline ? '#E8F5E9' : '#FFF8E1';
+        const statusColor = member.isOnline ? '#2E7D32' : '#F57F17';
+
         const info = new window.google.maps.InfoWindow({
-          content: `<div style="padding:8px;font-family:sans-serif;"><b style="color:#F57F17;font-size:14px;">👤 ${memberName}</b><p style="margin:4px 0 0;font-size:12px;color:#333;"><b>Status:</b> ${member.isMoving ? '🚶 Walking / In Motion' : '🧍 Stationary'}</p><p style="margin:2px 0 0;font-size:11px;color:#666;">Location: ${member.latitude.toFixed(4)}, ${member.longitude.toFixed(4)}</p></div>`,
+          content: `
+            <div style="padding:10px 12px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:210px;text-align:center;">
+              <div style="font-weight:700;font-size:14px;color:#1B2E24;margin-bottom:6px;">👤 ${memberName}</div>
+              <div style="display:inline-block;padding:4px 8px;border-radius:12px;background:${statusBg};color:${statusColor};font-size:11px;font-weight:600;margin-bottom:10px;">
+                ${statusText}
+              </div>
+              <div>
+                <button
+                  id="nav-to-${member.uid}"
+                  style="width:100%;padding:7px 12px;background:linear-gradient(135deg, #00897B, #004D40);color:#FFF;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;"
+                >
+                  <span>🧭</span> Navigate
+                </button>
+              </div>
+            </div>
+          `,
+        });
+
+        // Attach navigate click when InfoWindow DOM is ready
+        window.google.maps.event.addListener(info, 'domready', () => {
+          const btn = document.getElementById(`nav-to-${member.uid}`);
+          if (btn) {
+            btn.onclick = () => {
+              if (mapInstanceRef.current) {
+                mapInstanceRef.current.panTo({ lat: member.latitude, lng: member.longitude });
+                mapInstanceRef.current.setZoom(17);
+              }
+              info.close();
+            };
+          }
         });
 
         if (marker.addEventListener) {

@@ -28,6 +28,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { ROUTES } from '../../constants/routes';
+import { subscribeUserCircles } from '../../services/trustedCircleGroupService';
 import ThemeToggle from '../../components/ThemeToggle';
 
 function formatRole(role) {
@@ -39,6 +40,17 @@ export default function ProfileScreen() {
   const { userProfile, logout } = useAuth();
   const { colors } = useTheme();
   const navigation = useNavigation();
+
+  const [circlesCount, setCirclesCount] = useState(0);
+
+  // Subscribe in real-time to user's Trusted Circles count
+  useEffect(() => {
+    if (!userProfile?.uid) return;
+    const unsub = subscribeUserCircles(userProfile.uid, (circles) => {
+      setCirclesCount(Array.isArray(circles) ? circles.length : 0);
+    });
+    return () => unsub?.();
+  }, [userProfile?.uid]);
 
   // Animations
   const headerAnim  = useRef(new Animated.Value(0)).current;
@@ -176,8 +188,9 @@ export default function ProfileScreen() {
           <StatBlock
             colors={colors}
             icon={<Ionicons name="people-outline" size={22} color={colors.darkGreenMid} />}
-            value={userProfile?.trustedCount || 0}
+            value={circlesCount}
             label="Circle"
+            onPress={() => navigation.navigate(ROUTES.TRUSTED_CIRCLE)}
           />
           <View style={styles.statDivider} />
           <StatBlock
@@ -280,14 +293,19 @@ export default function ProfileScreen() {
 
 // ── Sub-components ───────────────────────────────────────────────
 
-function StatBlock({ colors, icon, value, label }) {
+function StatBlock({ colors, icon, value, label, onPress }) {
   const styles = getStyles(colors);
   return (
-    <View style={styles.statBlock}>
+    <TouchableOpacity
+      style={styles.statBlock}
+      activeOpacity={onPress ? 0.7 : 1}
+      onPress={onPress}
+      disabled={!onPress}
+    >
       {icon}
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 

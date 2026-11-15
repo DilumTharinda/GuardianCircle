@@ -5,7 +5,7 @@
  *   const { isDark, toggleTheme, colors } = useTheme();
  */
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 
 const ThemeContext = createContext({
@@ -21,10 +21,14 @@ export function ThemeProvider({ children }) {
     setIsDark((prev) => !prev);
   }, []);
 
-  const colors = isDark ? DARK_COLORS : LIGHT_COLORS;
+  const value = useMemo(() => ({
+    isDark,
+    toggleTheme,
+    colors: isDark ? DARK_COLORS : LIGHT_COLORS,
+  }), [isDark, toggleTheme]);
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme, colors }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

@@ -161,14 +161,20 @@ export default function NotificationsScreen({ navigation }) {
     }
 
     // Deep-link to target screen
-    if (item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE' || item.data?.circleId) {
+    if (item.data?.type === 'CIRCLE_MESSAGE' && item.data?.circleId) {
+      navigate(ROUTES.CIRCLE_CHAT, {
+        circleId: item.data.circleId,
+        circleName: item.data.circleName,
+        circlePhotoURL: item.data.circlePhotoURL || null,
+      });
+    } else if (item.data?.screen) {
+      navigate(item.data.screen, item.data.params || {});
+    } else if (item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE' || item.data?.circleId) {
       navigate(ROUTES.TRUSTED_CIRCLE, {
         circleId: item.data?.circleId,
         inviteId: item.data?.inviteId,
         circleName: item.data?.circleName,
       });
-    } else if (item.data?.screen) {
-      navigate(item.data.screen, item.data.params || {});
     } else if (item.data?.reportId) {
       navigate(ROUTES.CIRCLE_FIND_DETAIL, { reportId: item.data.reportId });
     } else if (item.category === 'sos') {
@@ -196,9 +202,26 @@ export default function NotificationsScreen({ navigation }) {
     const isSos = item.category === 'sos';
     const isCircleFind = item.category === 'circlefind';
     const isCircleInvite = item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE';
+    const isCircleChat = item.category === 'trusted_circle' || item.data?.type === 'CIRCLE_MESSAGE';
 
-    const iconName = isSos ? 'warning' : isCircleFind ? 'search' : isCircleInvite ? 'people' : 'notifications';
-    const iconColor = isSos ? colors.dangerRed : isCircleFind ? colors.darkGreenMid : isCircleInvite ? '#0D7C66' : '#1976D2';
+    const iconName = isSos
+      ? 'warning'
+      : isCircleFind
+      ? 'search'
+      : isCircleChat
+      ? 'chatbubbles'
+      : isCircleInvite
+      ? 'people'
+      : 'notifications';
+    const iconColor = isSos
+      ? colors.dangerRed
+      : isCircleFind
+      ? colors.darkGreenMid
+      : isCircleChat
+      ? '#00897B'
+      : isCircleInvite
+      ? '#0D7C66'
+      : '#1976D2';
     const isProcessing = processingInvites[item.id];
 
     return (

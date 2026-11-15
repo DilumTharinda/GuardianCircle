@@ -40,6 +40,7 @@ import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
 import { getCurrentCoordinates } from '../../services/locationService';
 import { subscribeToNearbyActivities } from '../../services/nearbyActivityService';
+import { subscribeUserCircles } from '../../services/trustedCircleGroupService';
 import SosButton from '../../components/SosButton';
 
 const { width } = Dimensions.get('window');
@@ -90,6 +91,40 @@ export default function HomeScreen() {
   const [nearbyActivities, setNearbyActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [showWelcomeUsernamePrompt, setShowWelcomeUsernamePrompt] = useState(false);
+  const [userCircles, setUserCircles] = useState([]);
+  const [activeCircleIndex, setActiveCircleIndex] = useState(0);
+  const circleScrollRef = useRef(null);
+
+  // Subscribe to user's Trusted Circles in real time
+  useEffect(() => {
+    if (!userProfile?.uid) return;
+    const unsub = subscribeUserCircles(userProfile.uid, (circles) => {
+      setUserCircles(circles || []);
+      setActiveCircleIndex(0);
+    });
+    return () => unsub?.();
+  }, [userProfile?.uid]);
+
+  // Auto-cycle / rotate through circles every 4 seconds (right to left carousel)
+  useEffect(() => {
+    if (userCircles.length <= 1) return;
+
+    const autoTimer = setInterval(() => {
+      setActiveCircleIndex((prev) => {
+        const next = (prev + 1) % userCircles.length;
+        const cardWidth = width - SPACING.xl * 2;
+        if (circleScrollRef.current) {
+          circleScrollRef.current.scrollTo({
+            x: next * cardWidth,
+            animated: true,
+          });
+        }
+        return next;
+      });
+    }, 4000);
+
+    return () => clearInterval(autoTimer);
+  }, [userCircles.length]);
 
   // Check if user is on default generated username and show welcome prompt once
   useEffect(() => {
@@ -143,19 +178,24 @@ export default function HomeScreen() {
     };
   }, []);
 
-  // Real-time subscription to nearby activities based on live coordinates
+  // Real-time subscription to nearby activities based on live coordinates & trusted circle updates
   useEffect(() => {
     setLoadingActivities(true);
 
-    const unsubscribe = subscribeToNearbyActivities(currentUserCoords, (items) => {
-      setNearbyActivities(items);
-      setLoadingActivities(false);
-    }, 4);
+    const unsubscribe = subscribeToNearbyActivities(
+      currentUserCoords,
+      (items) => {
+        setNearbyActivities(items);
+        setLoadingActivities(false);
+      },
+      5,
+      userProfile?.uid || null
+    );
 
     return () => {
       unsubscribe();
     };
-  }, [currentUserCoords]);
+  }, [currentUserCoords, userProfile?.uid]);
 
   useEffect(() => {
     if (childMode && userProfile?.uid) {
@@ -341,27 +381,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* You're marked safe card */}
-          <View style={[styles.safeCard, { backgroundColor: colors.surface, borderLeftColor: colors.darkGreenMid }]}>
-            <View style={[styles.safeCardIcon, { backgroundColor: colors.safeGreenLight }]}>
-              <MaterialCommunityIcons name="shield-check-outline" size={22} color={colors.darkGreenMid} />
-            </View>
-            <View style={styles.safeCardText}>
-              <Text style={[styles.safeCardTitle, { color: colors.textPrimary }]}>
-                You're marked safe
-              </Text>
-              <Text style={[styles.safeCardSub, { color: colors.darkGreenMid }]}>
-                No active journey · trusted circle: 4 people
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.safeViewBtn, { backgroundColor: colors.darkGreenMid }]}
-              onPress={() => navigation.navigate(ROUTES.SAFETY)}
-            >
-              <Text style={styles.safeViewBtnText}>View</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* ══════════════════════════════════════════════
               Safety SOS Button Hub & Radar Animation (matching Safety Screen)
           ══════════════════════════════════════════════ */}
@@ -378,6 +397,204 @@ export default function HomeScreen() {
             </Text>
           </View>
           {/* ══════════════════════════════════════════════ */}
+
+          {/* ══════════════════════════════════════════════
+              Trusted Circle Priority Section (Auto-scrolling / Right-to-Left carousel)
+          ══════════════════════════════════════════════ */}
+          {!childMode && (
+            <View style={styles.trustedCircleSection}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="security" size={20} color={colors.darkGreenMid} />
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 0 }]}>
+                    Trusted Circle
+                  </Text>
+                  {userCircles.length > 1 && (
+                    <View style={[styles.circleCountBadge, { backgroundColor: isDark ? colors.darkGreenSurface : '#E8F5E9' }]}>
+                      <Text style={[styles.circleCountText, { color: colors.darkGreenMid }]}>
+                        {activeCircleIndex + 1}/{userCircles.length}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate(ROUTES.TRUSTED_CIRCLE)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+                >
+                  <Text style={[styles.seeAllText, { color: colors.darkGreenMid }]}>Manage</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.darkGreenMid} />
+                </TouchableOpacity>
+              </View>
+
+              {userCircles.length === 0 ? (
+                /* Empty state when no circle exists yet */
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={[
+                    styles.circleHeroCard,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      width: width - SPACING.xl * 2,
+                    },
+                  ]}
+                  onPress={() => navigation.navigate(ROUTES.TRUSTED_CIRCLE)}
+                >
+                  <View style={styles.circleHeroHeader}>
+                    <View style={[styles.circleHeroIconBadge, { backgroundColor: isDark ? 'rgba(6,117,106,0.22)' : colors.safeGreenLight }]}>
+                      <Ionicons name="people" size={22} color={colors.darkGreenMid} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.circleHeroTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                        No Circle Created Yet
+                      </Text>
+                      <Text style={[styles.circleHeroSub, { color: colors.textSecondary }]}>
+                        Tap to form your personal safety network
+                      </Text>
+                    </View>
+                    <View style={[styles.liveDotPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F5F5F5' }]}>
+                      <View style={[styles.liveDot, { backgroundColor: '#9E9E9E' }]} />
+                      <Text style={[styles.liveDotText, { color: colors.textSecondary }]}>Setup</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                /* Horizontal auto-sliding carousel displaying each circle right to left */
+                <View style={styles.carouselOuterWrapper}>
+                  <ScrollView
+                    ref={circleScrollRef}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    decelerationRate="fast"
+                    snapToInterval={width - SPACING.xl * 2}
+                    snapToAlignment="center"
+                    contentContainerStyle={styles.carouselContentContainer}
+                    onMomentumScrollEnd={(e) => {
+                      const cardW = width - SPACING.xl * 2;
+                      const nextIndex = Math.round(e.nativeEvent.contentOffset.x / cardW);
+                      if (nextIndex >= 0 && nextIndex < userCircles.length) {
+                        setActiveCircleIndex(nextIndex);
+                      }
+                    }}
+                  >
+                    {userCircles.map((circle, idx) => {
+                      const memberCount = circle.members?.length || circle.memberUids?.length || 1;
+                      const cardWidth = width - SPACING.xl * 2;
+
+                      return (
+                        <TouchableOpacity
+                          key={circle.id || `circle-${idx}`}
+                          activeOpacity={0.88}
+                          style={[
+                            styles.circleHeroCard,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                              width: cardWidth,
+                            },
+                          ]}
+                          onPress={() => {
+                            navigation.navigate('Main', {
+                              screen: ROUTES.MAP,
+                              params: {
+                                selectedCircleId: circle.id,
+                                selectedCircleName: circle.name,
+                                memberUids: circle.memberUids || [],
+                              },
+                            });
+                          }}
+                        >
+                          <View style={styles.circleHeroHeader}>
+                            <View style={[styles.circleHeroIconBadge, { backgroundColor: isDark ? 'rgba(6,117,106,0.22)' : colors.safeGreenLight }]}>
+                              <Ionicons name="people" size={22} color={colors.darkGreenMid} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.circleHeroTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                                {circle.name || `Circle #${idx + 1}`}
+                              </Text>
+                              <Text style={[styles.circleHeroSub, { color: colors.textSecondary }]}>
+                                {`${memberCount} trusted member(s) active`}
+                              </Text>
+                            </View>
+                            <View style={[styles.liveDotPill, { backgroundColor: isDark ? 'rgba(46,125,50,0.22)' : '#E8F5E9' }]}>
+                              <View style={[styles.liveDot, { backgroundColor: '#2E7D32' }]} />
+                              <Text style={[styles.liveDotText, { color: colors.darkGreenMid }]}>Live Map</Text>
+                            </View>
+                          </View>
+
+                          {/* Member Avatars & Live Action Row */}
+                          <View style={[styles.circleMembersRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : colors.divider || '#EEF2EE' }]}>
+                            <View style={styles.circleAvatarGroup}>
+                              {circle.members && circle.members.length > 0 ? (
+                                circle.members.slice(0, 4).map((m, mIdx) => (
+                                  <View
+                                    key={m.uid || `member-${mIdx}`}
+                                    style={[
+                                      styles.circleMiniAvatar,
+                                      {
+                                        borderColor: colors.surface,
+                                        backgroundColor: isDark ? colors.darkGreenSurface : '#E8F5E9',
+                                        marginLeft: mIdx > 0 ? -8 : 0,
+                                      },
+                                    ]}
+                                  >
+                                    <Text style={[styles.circleMiniAvatarText, { color: colors.darkGreenMid }]}>
+                                      {(m.displayName || m.username || 'M').charAt(0).toUpperCase()}
+                                    </Text>
+                                  </View>
+                                ))
+                              ) : (
+                                <Text style={[styles.circleEmptyNotice, { color: colors.textMuted }]}>No other members</Text>
+                              )}
+                              {circle.members && circle.members.length > 4 && (
+                                <View
+                                  style={[
+                                    styles.circleMiniAvatar,
+                                    styles.circleMiniAvatarPlus,
+                                    { borderColor: colors.surface, backgroundColor: colors.darkGreenMid, marginLeft: -8 },
+                                  ]}
+                                >
+                                  <Text style={{ fontSize: 10, color: '#FFF', fontWeight: 'bold' }}>
+                                    +{circle.members.length - 4}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+
+                            <View style={[styles.trackOnMapBtn, { backgroundColor: isDark ? 'rgba(6,117,106,0.18)' : '#E0F2F1' }]}>
+                              <Ionicons name="navigate" size={13} color={colors.darkGreenMid} style={{ marginRight: 4 }} />
+                              <Text style={[styles.trackOnMapText, { color: colors.darkGreenMid }]}>
+                                Track
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {/* Carousel Pagination Dots */}
+                  {userCircles.length > 1 && (
+                    <View style={styles.carouselDotsRow}>
+                      {userCircles.map((_, dotIdx) => (
+                        <View
+                          key={`dot-${dotIdx}`}
+                          style={[
+                            styles.carouselDot,
+                            {
+                              backgroundColor: dotIdx === activeCircleIndex ? colors.darkGreenMid : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'),
+                              width: dotIdx === activeCircleIndex ? 16 : 6,
+                            },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Quick access */}
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick access</Text>
@@ -411,6 +628,8 @@ export default function HomeScreen() {
               let iconElement = <Ionicons name="warning-outline" size={24} color={colors.warnOrange} />;
               if (act.type === 'sos') {
                 iconElement = <Ionicons name="alert-circle" size={24} color={colors.dangerRed} />;
+              } else if (act.type === 'circle_activity') {
+                iconElement = <Ionicons name="chatbubbles" size={24} color={colors.darkGreenMid} />;
               } else if (act.type === 'circlefind') {
                 const cat = (act.category || '').toLowerCase();
                 if (cat.includes('pet') || cat.includes('dog') || cat.includes('cat')) {
@@ -435,6 +654,13 @@ export default function HomeScreen() {
                       title: act.title,
                       isEmergency: true,
                     } : undefined,
+                  });
+                } else if (act.type === 'circle_activity') {
+                  navigation.navigate(ROUTES.CIRCLE_CHAT, {
+                    circleId: act.data?.circleId,
+                    circleName: act.data?.circleName,
+                    circlePhotoURL: act.data?.circlePhotoURL,
+                    members: act.data?.members || [],
                   });
                 } else if (act.type === 'unsafe_hazard') {
                   const loc = act.data?.location || {};
@@ -570,6 +796,7 @@ function NearbyCard({ colors, icon, title, sub, chip, chipType, onPress }) {
     warn:    { bg: colors.warnOrangeLight, text: colors.warnOrange },
     missing: { bg: colors.missingPinkLight, text: colors.missingPink },
     sos:     { bg: '#FFEBEE', text: '#D32F2F' },
+    circle:  { bg: colors.safeGreenLight,  text: colors.darkGreenMid },
   };
   const c = chipColors[chipType] || chipColors.safe;
 
@@ -876,5 +1103,141 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: FONTS.sm,
     fontWeight: FONTS.bold,
+  },
+
+  // Trusted Circle Priority Section Styles
+  trustedCircleSection: {
+    marginBottom: SPACING.xl,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  seeAllText: {
+    fontSize: FONTS.sm,
+    fontWeight: FONTS.semiBold,
+  },
+  circleHeroCard: {
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md + 2,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginVertical: 2,
+  },
+  carouselOuterWrapper: {
+    paddingVertical: 2,
+  },
+  carouselContentContainer: {
+    paddingVertical: 2,
+  },
+  circleHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm + 2,
+  },
+  circleHeroIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleHeroTitle: {
+    fontSize: FONTS.base,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  circleHeroSub: {
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  liveDotPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    gap: 5,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  liveDotText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  circleMembersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm + 4,
+    paddingTop: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  circleAvatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  circleEmptyNotice: {
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  circleMiniAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleMiniAvatarPlus: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleMiniAvatarText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  trackOnMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: RADIUS.md,
+  },
+  trackOnMapText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  circleCountBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    marginLeft: 4,
+  },
+  circleCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  carouselDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 8,
+  },
+  carouselDot: {
+    height: 5,
+    borderRadius: 3,
   },
 });

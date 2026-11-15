@@ -64,19 +64,45 @@ export default function NotificationDropdown({
   // Tab Filtering & Counts
   const sosList = useMemo(() => notifications.filter((n) => n.category === 'sos'), [notifications]);
   const circleFindList = useMemo(() => notifications.filter((n) => n.category === 'circlefind'), [notifications]);
-  const alertsList = useMemo(() => notifications.filter((n) => n.category === 'alerts' || n.category === 'system' || n.category === 'safety'), [notifications]);
+  const circlesList = useMemo(
+    () =>
+      notifications.filter(
+        (n) =>
+          n.category === 'trusted_circle' ||
+          n.category === 'TRUSTED_CIRCLE_INVITE' ||
+          n.data?.type === 'CIRCLE_MESSAGE' ||
+          n.data?.type === 'CIRCLE_MEMBER_JOINED' ||
+          n.data?.type === 'CIRCLE_UPDATE' ||
+          n.data?.circleId
+      ),
+    [notifications]
+  );
+  const alertsList = useMemo(
+    () =>
+      notifications.filter(
+        (n) =>
+          n.category === 'alerts' ||
+          n.category === 'system' ||
+          n.category === 'safety' ||
+          n.category === 'trusted_circle' ||
+          n.data?.circleId
+      ),
+    [notifications]
+  );
 
   const unreadAllCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
   const unreadSosCount = useMemo(() => sosList.filter((n) => !n.read).length, [sosList]);
   const unreadCircleFindCount = useMemo(() => circleFindList.filter((n) => !n.read).length, [circleFindList]);
+  const unreadCirclesCount = useMemo(() => circlesList.filter((n) => !n.read).length, [circlesList]);
   const unreadAlertsCount = useMemo(() => alertsList.filter((n) => !n.read).length, [alertsList]);
 
   const displayedList = useMemo(() => {
     if (activeTab === 'sos') return sosList;
     if (activeTab === 'circlefind') return circleFindList;
+    if (activeTab === 'circles') return circlesList;
     if (activeTab === 'alerts') return alertsList;
     return notifications;
-  }, [activeTab, sosList, circleFindList, alertsList, notifications]);
+  }, [activeTab, sosList, circleFindList, circlesList, alertsList, notifications]);
 
   // Strip any emoji characters that may have been saved in previously created Firestore docs
   const cleanText = (text) => {
@@ -97,14 +123,20 @@ export default function NotificationDropdown({
     }
     onClose();
 
-    if (item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE' || item.data?.circleId) {
+    if (item.data?.type === 'CIRCLE_MESSAGE' && item.data?.circleId) {
+      navigate(ROUTES.CIRCLE_CHAT, {
+        circleId: item.data.circleId,
+        circleName: item.data.circleName,
+        circlePhotoURL: item.data.circlePhotoURL || null,
+      });
+    } else if (item.data?.screen) {
+      navigate(item.data.screen, item.data.params || {});
+    } else if (item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE' || item.data?.circleId) {
       navigate(ROUTES.TRUSTED_CIRCLE, {
         circleId: item.data?.circleId,
         inviteId: item.data?.inviteId,
         circleName: item.data?.circleName,
       });
-    } else if (item.data?.screen) {
-      navigate(item.data.screen, item.data.params || {});
     } else if (item.data?.reportId) {
       navigate(ROUTES.CIRCLE_FIND_DETAIL, { reportId: item.data.reportId });
     } else if (item.category === 'sos') {
@@ -214,6 +246,22 @@ export default function NotificationDropdown({
                     )}
                   </TouchableOpacity>
 
+                  {/* Circles Tab */}
+                  <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'circles' && styles.tabBtnActive]}
+                    onPress={() => setActiveTab('circles')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.tabLabel, activeTab === 'circles' && styles.tabLabelActive]}>
+                      Circles
+                    </Text>
+                    {unreadCirclesCount > 0 && (
+                      <View style={[styles.tabGreenBadgePill, { backgroundColor: '#00897B' }]}>
+                        <Text style={styles.tabGreenBadgeText}>{unreadCirclesCount}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
                   {/* Alerts Tab (Unsafe alerts, Circle joins, Login notices) */}
                   <TouchableOpacity
                     style={[styles.tabBtn, activeTab === 'alerts' && styles.tabBtnActive]}
@@ -258,17 +306,28 @@ export default function NotificationDropdown({
                     const isUnread = !item.read;
                     const isSos = item.category === 'sos';
                     const isCircleFind = item.category === 'circlefind';
-                    const isAlert = !isSos && !isCircleFind;
+                    const isCircle =
+                      item.category === 'trusted_circle' ||
+                      item.category === 'TRUSTED_CIRCLE_INVITE' ||
+                      item.data?.type === 'CIRCLE_MESSAGE' ||
+                      item.data?.type === 'CIRCLE_MEMBER_JOINED' ||
+                      item.data?.type === 'CIRCLE_UPDATE' ||
+                      item.data?.circleId;
+                    const isAlert = !isSos && !isCircleFind && !isCircle;
 
                     // Avatar or Icon styling matching the card reference
                     const badgeBg = isSos
                       ? '#FFEBEE'
+                      : isCircle
+                      ? '#E0F2F1'
                       : isCircleFind
                       ? '#E8F5E9'
                       : '#FFF3E0';
 
                     const iconColor = isSos
                       ? '#E53935'
+                      : isCircle
+                      ? '#00897B'
                       : isCircleFind
                       ? colors.darkGreenMid
                       : '#FB8C00';
@@ -277,10 +336,12 @@ export default function NotificationDropdown({
                       ? 'warning'
                       : isCircleFind
                       ? 'search'
+                      : item.data?.type === 'CIRCLE_MESSAGE'
+                      ? 'chat'
                       : item.title?.toLowerCase().includes('login')
                       ? 'lock'
-                      : item.title?.toLowerCase().includes('circle')
-                      ? 'group-add'
+                      : isCircle
+                      ? 'groups'
                       : 'shield';
 
                     return (

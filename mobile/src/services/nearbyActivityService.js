@@ -3,6 +3,7 @@ import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './firebase';
 import { getDistanceKm, formatDistance, formatRelativeTime } from './circleFindService';
+import { TRUSTED_CIRCLES_COLLECTION } from './trustedCircleGroupService';
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
 const MAX_EMERGENCY_ALERT_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -136,17 +137,71 @@ function parseReportDoc(docId, data, userCoords) {
 }
 
 /**
- * Subscribes in real-time to active SOS Alerts and Reports.
- * Immediately invokes callback whenever any alert or report changes.
+ * Parses Trusted Circle documents into Nearby Activity objects.
+ */
+function parseCircleActivity(docId, data, currentUserId) {
+  if (!data) return null;
+  const members = Array.isArray(data.members) ? data.members : [];
+  const memberCount = members.length || (data.memberUids || []).length || 1;
+  const circleName = data.name || 'Trusted Circle';
+
+  let title = `Circle: ${circleName}`;
+  let sub = `${memberCount} member(s) connected`;
+  let chip = 'Circle';
+  let chipType = 'circle';
+  let priority = 70;
+  let createdAt = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : (data.updatedAt || data.createdAt?.toMillis ? data.createdAt.toMillis() : Date.now());
+
+  if (data.lastMessage && data.lastMessage.text) {
+    const isMe = data.lastMessage.senderId === currentUserId;
+    const sender = isMe ? 'You' : (data.lastMessage.senderName || 'Member');
+    title = `Circle Chat: ${circleName}`;
+    sub = `${sender}: "${data.lastMessage.text}"`;
+    chip = 'Message';
+    chipType = 'circle';
+    priority = 75;
+    if (data.lastMessage.sentAt) {
+      const msgTime = new Date(data.lastMessage.sentAt).getTime();
+      if (!isNaN(msgTime)) createdAt = msgTime;
+    }
+  } else if (data.createdByName) {
+    sub = `Active network · Created by ${data.createdByName}`;
+  }
+
+  return {
+    id: `circle_${docId}`,
+    type: 'circle_activity',
+    title,
+    sub,
+    chip,
+    chipType,
+    priority,
+    createdAt,
+    distanceKm: null,
+    distanceText: null,
+    data: {
+      circleId: docId,
+      circleName: data.name,
+      circlePhotoURL: data.photoURL || null,
+      members,
+    },
+  };
+}
+
+/**
+ * Subscribes in real-time to active SOS Alerts, Reports, and Trusted Circle activities.
+ * Immediately invokes callback whenever any alert, report, or circle changes.
  *
  * @param {Object|null} userCoords - { latitude, longitude }
  * @param {Function} onUpdate - callback(activitiesArray)
- * @param {number} maxItems - Maximum items to show (default 4)
+ * @param {number} maxItems - Maximum items to show (default 5)
+ * @param {string|null} currentUserId - optional authenticated user UID
  * @returns {Function} unsubscribe function
  */
-export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) {
+export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 5, currentUserId = null) {
   let sosActivities = [];
   let reportActivities = [];
+  let circleActivities = [];
 
   const mergeAndEmit = async () => {
     // Also include any locally stored active alerts for zero-latency local feedback
@@ -174,9 +229,9 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
       if (!alertMap.has(item.id) && !locallyResolvedAlertIds.has(item.id)) alertMap.set(item.id, item);
     });
 
-    const combined = [...Array.from(alertMap.values()), ...reportActivities];
+    const combined = [...Array.from(alertMap.values()), ...reportActivities, ...circleActivities];
 
-  // Sort: Emergency SOS first (priority: 100), then Urgent child alerts (95), then Unsafe hazard spots (80), then Missing CircleFind items (60)
+  // Sort: Emergency SOS first (priority: 100), then Urgent child alerts (95), then Unsafe hazard spots (80), then Circle chat/updates (70-75), then Missing CircleFind items (60)
   // Inside each tier, sort by closest distance, then most recent
   combined.sort((a, b) => {
     if (b.priority !== a.priority) return b.priority - a.priority;
@@ -188,23 +243,37 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
     return timeB - timeA;
   });
 
-  // Guarantee diverse representation: show active emergency SOS, but ensure reported unsafe zones and CircleFind posts are surfaced
+  // Guarantee diverse representation: show active emergency SOS, but ensure reported unsafe zones, CircleFind posts, and Trusted Circle activities are surfaced
   const finalItems = [];
   const sosList = combined.filter(item => item.type === 'sos');
   const hazardList = combined.filter(item => item.type === 'unsafe_hazard');
   const circleFindList = combined.filter(item => item.type === 'circlefind');
+  const circleList = combined.filter(item => item.type === 'circle_activity');
 
   // Add up to 2 active SOS alerts
   sosList.slice(0, 2).forEach(item => finalItems.push(item));
 
-  // If there are unsafe hazards or CircleFind items, include them next
+  // If there are trusted circle activities, ensure at least 1 is featured
+  if (circleList.length > 0) {
+    finalItems.push(circleList[0]);
+  }
+
+  // If there are unsafe hazards, include them next
   hazardList.forEach(item => {
     if (finalItems.length < maxItems && !finalItems.some(f => f.id === item.id)) {
       finalItems.push(item);
     }
   });
 
+  // If there are CircleFind items, include them next
   circleFindList.forEach(item => {
+    if (finalItems.length < maxItems && !finalItems.some(f => f.id === item.id)) {
+      finalItems.push(item);
+    }
+  });
+
+  // If still room, fill with any remaining circle activities
+  circleList.slice(1).forEach(item => {
     if (finalItems.length < maxItems && !finalItems.some(f => f.id === item.id)) {
       finalItems.push(item);
     }
@@ -265,7 +334,32 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
     }
   );
 
-  // 3. Listen to local device emergency alert events for instant reactive refresh
+  // 3. Live listener for user's Trusted Circles activity (if authenticated user UID is provided)
+  let unsubCircles = null;
+  if (currentUserId) {
+    const circlesQuery = query(
+      collection(db, TRUSTED_CIRCLES_COLLECTION),
+      where('memberUids', 'array-contains', currentUserId),
+      limit(10)
+    );
+    unsubCircles = onSnapshot(
+      circlesQuery,
+      (snapshot) => {
+        circleActivities = [];
+        snapshot.forEach((docSnap) => {
+          const item = parseCircleActivity(docSnap.id, docSnap.data(), currentUserId);
+          if (item) circleActivities.push(item);
+        });
+        mergeAndEmit();
+      },
+      (error) => {
+        console.warn('[nearbyActivityService] onSnapshot circles error:', error?.message || error);
+        mergeAndEmit();
+      }
+    );
+  }
+
+  // 4. Listen to local device emergency alert events for instant reactive refresh
   const sub = DeviceEventEmitter.addListener('EMERGENCY_ALERT_UPDATED', (payload) => {
     if (payload?.alertId && (payload?.status === 'resolved' || payload?.status === 'cancelled')) {
       locallyResolvedAlertIds.add(payload.alertId);
@@ -282,6 +376,7 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
   return () => {
     unsubAlerts();
     unsubReports();
+    unsubCircles?.();
     sub?.remove?.();
     clearInterval(pruneInterval);
   };

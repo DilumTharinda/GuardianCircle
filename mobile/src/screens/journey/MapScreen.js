@@ -14,6 +14,7 @@ import {
   DeviceEventEmitter,
   Dimensions,
   Keyboard,
+  Modal,
   Platform,
   StatusBar,
   StyleSheet,
@@ -40,7 +41,7 @@ import { getRouteCandidates, rankRouteCandidates } from '../../services/saferRou
 import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
 import { subscribeToActiveEmergencyAlerts } from '../../services/alertService';
-import { subscribeCircleMembersLocations } from '../../services/circleTrackingService';
+import { subscribeCircleMembersLocations, updateUserLocationHeartbeat } from '../../services/circleTrackingService';
 import CircleMapTrackerBar from '../../components/journey/CircleMapTrackerBar';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -169,16 +170,16 @@ async function fetchPlaceSuggestions(query) {
 function getZoomMetrics(level) {
   switch (level) {
     case 5: // Very close street / road view (< 0.003 delta)
-      return { level: 5, humanSize: 130, nameFontSize: 15, warningSize: 56, badgeSize: 110, ringD: 140, containerSize: 260 };
+      return { level: 5, humanSize: 52, nameFontSize: 11, warningSize: 32, badgeSize: 64, ringD: 64, containerSize: 154 };
     case 4: // Close street / neighborhood (< 0.008 delta)
-      return { level: 4, humanSize: 115, nameFontSize: 14, warningSize: 48, badgeSize: 96, ringD: 125, containerSize: 230 };
+      return { level: 4, humanSize: 46, nameFontSize: 11, warningSize: 28, badgeSize: 54, ringD: 54, containerSize: 130 };
     case 3: // Suburb / standard default (< 0.025 delta)
-      return { level: 3, humanSize: 100, nameFontSize: 13, warningSize: 40, badgeSize: 84, ringD: 110, containerSize: 200 };
+      return { level: 3, humanSize: 40, nameFontSize: 10, warningSize: 24, badgeSize: 48, ringD: 48, containerSize: 116 };
     case 2: // City view (< 0.08 delta)
-      return { level: 2, humanSize: 85, nameFontSize: 12, warningSize: 32, badgeSize: 70, ringD: 95, containerSize: 170 };
+      return { level: 2, humanSize: 34, nameFontSize: 10, warningSize: 20, badgeSize: 40, ringD: 40, containerSize: 96 };
     case 1: // State / country view (>= 0.08 delta)
     default:
-      return { level: 1, humanSize: 70, nameFontSize: 11, warningSize: 26, badgeSize: 58, ringD: 80, containerSize: 140 };
+      return { level: 1, humanSize: 28, nameFontSize: 9, warningSize: 16, badgeSize: 34, ringD: 34, containerSize: 82 };
   }
 }
 
@@ -268,6 +269,7 @@ export default function MapScreen({ navigation, route }) {
       : null
   );
   const [circleMembersLocations, setCircleMembersLocations] = useState([]);
+  const [selectedCircleMember, setSelectedCircleMember] = useState(null);
 
   // Update active circle when route params change
   useEffect(() => {
@@ -308,6 +310,18 @@ export default function MapScreen({ navigation, route }) {
   const ring2Opacity = useRef(new Animated.Value(0.65)).current;
   const coreScale = useRef(new Animated.Value(1.0)).current;
 
+  // Blinking opacity animation for offline circle members
+  const offlineBlinkAnim = useRef(new Animated.Value(1.0)).current;
+  const [offlineBlinkVisible, setOfflineBlinkVisible] = useState(true);
+
+  // Interval-based blinking toggle to guarantee state changes for Native Markers
+  useEffect(() => {
+    const blinkInterval = setInterval(() => {
+      setOfflineBlinkVisible((prev) => !prev);
+    }, 650);
+    return () => clearInterval(blinkInterval);
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     const pulseSOS = () => {
@@ -317,6 +331,11 @@ export default function MapScreen({ navigation, route }) {
         Animated.sequence([
           Animated.timing(coreScale, { toValue: 1.07, duration: 1200, useNativeDriver: false }),
           Animated.timing(coreScale, { toValue: 1.0, duration: 1200, useNativeDriver: false }),
+        ]),
+        // Offline member icon blinking: smooth blink in and out
+        Animated.sequence([
+          Animated.timing(offlineBlinkAnim, { toValue: 0.2, duration: 600, useNativeDriver: false }),
+          Animated.timing(offlineBlinkAnim, { toValue: 1.0, duration: 600, useNativeDriver: false }),
         ]),
         // Ring 1 (inner ripple) — expands outward from 1.0 to 1.95, fading out
         Animated.sequence([
@@ -350,7 +369,7 @@ export default function MapScreen({ navigation, route }) {
     return () => {
       isMounted = false;
     };
-  }, [ring1Scale, ring1Opacity, ring2Scale, ring2Opacity, coreScale]);
+  }, [ring1Scale, ring1Opacity, ring2Scale, ring2Opacity, coreScale, offlineBlinkAnim]);
 
   // ── Two-Finger Pinch Zoom Detection & Dynamic Circle Buttons ────────────────
   const [zoomButtonsVisible, setZoomButtonsVisible] = useState(false);
@@ -494,6 +513,7 @@ export default function MapScreen({ navigation, route }) {
   const cadenceStepCount = useRef(0);
   const stationaryAnchor = useRef(null);
   const idleCheckInterval = useRef(null);
+  const lastGpsSync = useRef(0);
 
   // Rapid & reliable movement detection
   const onCadenceStep = useCallback((now) => {
@@ -676,6 +696,17 @@ export default function MapScreen({ navigation, route }) {
                 }));
 
                 onGpsLocation(currentFix, speed);
+
+                // Heartbeat to Firestore every ~3 seconds while Map is active
+                if (user?.uid && (!lastGpsSync.current || now - lastGpsSync.current > 3000)) {
+                  lastGpsSync.current = now;
+                  updateUserLocationHeartbeat(user.uid, {
+                    latitude,
+                    longitude,
+                    speed: speed ?? null,
+                    isMoving: (speed || 0) > 0.4 || isMoving,
+                  });
+                }
               }
             );
             locationSubscription.current = sub;
@@ -1032,8 +1063,8 @@ export default function MapScreen({ navigation, route }) {
                   style={[
                     styles.userMarkerContainer,
                     {
-                      width: zoomMetrics.humanSize + 20,
-                      height: zoomMetrics.humanSize + 20,
+                      width: zoomMetrics.containerSize,
+                      height: zoomMetrics.containerSize,
                     },
                   ]}
                 >
@@ -1239,29 +1270,13 @@ export default function MapScreen({ navigation, route }) {
           {/* 2c. Live Trusted Circle Members Tracking (Yellow #FFD600 Human Icon with Display Name above, NO pulse rings) */}
           {activeCircleTracker && circleMembersLocations.map((member) => (
             <Marker
-              key={`circle-member-${member.uid}-z${zoomMetrics.level}`}
+              key={`circle-member-${member.uid}-z${zoomMetrics.level}-${!member.isOnline ? (offlineBlinkVisible ? 'on' : 'off') : 'solid'}`}
               coordinate={{ latitude: member.latitude, longitude: member.longitude }}
               anchor={{ x: 0.5, y: 0.7 }}
               zIndex={60}
               tracksViewChanges={true}
               onPress={() => {
-                Alert.alert(
-                  `👤 ${member.displayName}`,
-                  `Status: ${member.isMoving ? '🚶 Walking / In Motion' : '🧍 Stationary'}\nLocation: ${member.latitude.toFixed(4)}, ${member.longitude.toFixed(4)}`,
-                  [
-                    { text: 'Close', style: 'cancel' },
-                    {
-                      text: `Navigate to ${member.displayName}`,
-                      onPress: () => {
-                        handleRouteToDestination({
-                          latitude: member.latitude,
-                          longitude: member.longitude,
-                          name: member.displayName,
-                        });
-                      },
-                    },
-                  ]
-                );
+                setSelectedCircleMember(member);
               }}
             >
               <View style={styles.customMarkerWrapper}>
@@ -1280,14 +1295,21 @@ export default function MapScreen({ navigation, route }) {
                   </Text>
                 </View>
 
-                {/* Clean Yellow Human Icon (NO ring animation, only for my location) */}
-                <View style={styles.humanMarkerBadge}>
+                {/* Clean Yellow Human Icon (NO ring animation; blinks if offline, static if online; walking vs stopped) */}
+                <Animated.View
+                  style={[
+                    styles.humanMarkerBadge,
+                    !member.isOnline && {
+                      opacity: offlineBlinkVisible ? 1.0 : 0.15,
+                    },
+                  ]}
+                >
                   <MaterialIcons
                     name={member.isMoving ? 'directions-walk' : 'man'}
                     size={zoomMetrics.humanSize}
                     color="#FFD600"
                   />
-                </View>
+                </Animated.View>
               </View>
             </Marker>
           ))}
@@ -1534,6 +1556,130 @@ export default function MapScreen({ navigation, route }) {
           onReported={() => setReportOpen(false)}
         />
       )}
+
+      {/* Modern Trusted Circle Member Detail & Navigate Bottom Modal */}
+      <Modal
+        visible={Boolean(selectedCircleMember)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedCircleMember(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setSelectedCircleMember(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.memberModalContainer, { backgroundColor: colors.surface }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            {/* Header with avatar / status */}
+            <View style={styles.memberModalHeader}>
+              <View
+                style={[
+                  styles.memberModalAvatar,
+                  { backgroundColor: selectedCircleMember?.isOnline ? 'rgba(76, 175, 80, 0.15)' : 'rgba(255, 179, 0, 0.15)' },
+                ]}
+              >
+                <MaterialIcons
+                  name={selectedCircleMember?.isMoving ? 'directions-walk' : 'man'}
+                  size={32}
+                  color={selectedCircleMember?.isOnline ? '#2E7D32' : '#FFB300'}
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.memberModalName, { color: colors.text }]} numberOfLines={1}>
+                  {selectedCircleMember?.displayName || 'Circle Member'}
+                </Text>
+                {selectedCircleMember?.username ? (
+                  <Text style={[styles.memberModalUsername, { color: colors.textSecondary }]}>
+                    @{selectedCircleMember.username}
+                  </Text>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setSelectedCircleMember(null)}
+                style={[styles.memberModalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Status Information Badge */}
+            <View
+              style={[
+                styles.memberModalStatusBox,
+                {
+                  backgroundColor: selectedCircleMember?.isOnline
+                    ? (isDark ? 'rgba(46, 125, 50, 0.18)' : '#E8F5E9')
+                    : (isDark ? 'rgba(255, 179, 0, 0.14)' : '#FFF8E1'),
+                  borderColor: selectedCircleMember?.isOnline
+                    ? (isDark ? 'rgba(76, 175, 80, 0.35)' : '#C8E6C9')
+                    : (isDark ? 'rgba(255, 179, 0, 0.35)' : '#FFE082'),
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: selectedCircleMember?.isOnline ? '#4CAF50' : '#FFB300' },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.memberModalStatusText,
+                  { color: selectedCircleMember?.isOnline ? (isDark ? '#81C784' : '#2E7D32') : (isDark ? '#FFD54F' : '#F57F17') },
+                ]}
+              >
+                {!selectedCircleMember?.isOnline
+                  ? 'Offline / Disconnected'
+                  : selectedCircleMember?.isMoving
+                  ? 'Walking / In Motion'
+                  : 'Stationary / Stopped'}
+              </Text>
+            </View>
+
+            {/* Actions: Cancel vs Navigate */}
+            <View style={styles.memberModalActions}>
+              <TouchableOpacity
+                style={[styles.memberModalCancelBtn, { borderColor: colors.border }]}
+                onPress={() => setSelectedCircleMember(null)}
+              >
+                <Text style={[styles.memberModalCancelText, { color: colors.textSecondary }]}>Close</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.memberModalNavBtn}
+                activeOpacity={0.85}
+                onPress={() => {
+                  const target = selectedCircleMember;
+                  setSelectedCircleMember(null);
+                  if (target) {
+                    handleRouteToDestination({
+                      latitude: target.latitude,
+                      longitude: target.longitude,
+                      name: target.displayName,
+                    });
+                  }
+                }}
+              >
+                <LinearGradient
+                  colors={[colors.darkGreenMid || '#00897B', colors.darkGreen || '#004D40']}
+                  style={styles.memberModalNavGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="navigate" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.memberModalNavText}>Navigate</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1946,6 +2092,103 @@ const getStyles = (colors, isDark, insets) => {
       elevation: 5,
       zIndex: 20,
       ...SHADOWS.medium,
+    },
+
+    // Modern Circle Member Pop-up Modal Styles
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: SPACING.md,
+    },
+    memberModalContainer: {
+      width: '100%',
+      maxWidth: 340,
+      borderRadius: RADIUS.xl,
+      padding: SPACING.lg,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)',
+      ...SHADOWS.large,
+    },
+    memberModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    memberModalAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    memberModalName: {
+      fontSize: FONTS.base,
+      fontWeight: '700',
+    },
+    memberModalUsername: {
+      fontSize: FONTS.xs,
+      marginTop: 2,
+    },
+    memberModalCloseBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    memberModalStatusBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      marginBottom: SPACING.lg,
+      gap: 8,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    memberModalStatusText: {
+      fontSize: FONTS.sm,
+      fontWeight: '600',
+    },
+    memberModalActions: {
+      flexDirection: 'row',
+      gap: SPACING.sm,
+    },
+    memberModalCancelBtn: {
+      flex: 1,
+      paddingVertical: 11,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    memberModalCancelText: {
+      fontSize: FONTS.sm,
+      fontWeight: '600',
+    },
+    memberModalNavBtn: {
+      flex: 1.5,
+      borderRadius: RADIUS.md,
+      overflow: 'hidden',
+    },
+    memberModalNavGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+    },
+    memberModalNavText: {
+      color: '#FFF',
+      fontWeight: '700',
+      fontSize: FONTS.sm,
     },
   });
 };
