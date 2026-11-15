@@ -24,17 +24,19 @@ import { logActivity, AUDIT_ACTIONS } from '../services/auditLogService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let GoogleSignin = null;
-try {
-  const gSigninModule = require('@react-native-google-signin/google-signin');
-  if (gSigninModule && gSigninModule.GoogleSignin) {
-    GoogleSignin = gSigninModule.GoogleSignin;
-    GoogleSignin.configure({
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'dummy-web-client-id.apps.googleusercontent.com',
-      offlineAccess: true,
-    });
+if (Platform.OS !== 'web') {
+  try {
+    const gSigninModule = require('@react-native-google-signin/google-signin');
+    if (gSigninModule && gSigninModule.GoogleSignin) {
+      GoogleSignin = gSigninModule.GoogleSignin;
+      GoogleSignin.configure({
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'dummy-web-client-id.apps.googleusercontent.com',
+        offlineAccess: true,
+      });
+    }
+  } catch (e) {
+    // Expected in Expo Go without prebuild; handled gracefully when loginWithGoogle is tapped
   }
-} catch (e) {
-  // Expected in Expo Go without prebuild; handled gracefully when loginWithGoogle is tapped
 }
 
 // Safe secure storage helper for native & web

@@ -6,6 +6,7 @@ import { getDistanceKm, formatDistance, formatRelativeTime } from './circleFindS
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
 const MAX_EMERGENCY_ALERT_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+const locallyResolvedAlertIds = new Set();
 
 /**
  * Checks whether an alert is within the 2-hour active TTL window.
@@ -155,7 +156,7 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
       if (localAlertsRaw) {
         const parsed = JSON.parse(localAlertsRaw);
         if (Array.isArray(parsed)) {
-          parsed.filter(a => a.status === 'active' && isAlertWithinTwoHours(a)).forEach(alert => {
+          parsed.filter(a => a.status === 'active' && !locallyResolvedAlertIds.has(a.id) && isAlertWithinTwoHours(a)).forEach(alert => {
             localSOS.push(parseAlertDoc(alert.id || 'local_alert', alert, userCoords));
           });
         }
@@ -165,12 +166,12 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
     // Combine SOS: deduplicate by id
     const alertMap = new Map();
     sosActivities.forEach(item => {
-      if (item && isAlertWithinTwoHours(item)) {
+      if (item && !locallyResolvedAlertIds.has(item.id) && isAlertWithinTwoHours(item)) {
         alertMap.set(item.id, item);
       }
     });
     localSOS.forEach(item => {
-      if (!alertMap.has(item.id)) alertMap.set(item.id, item);
+      if (!alertMap.has(item.id) && !locallyResolvedAlertIds.has(item.id)) alertMap.set(item.id, item);
     });
 
     const combined = [...Array.from(alertMap.values()), ...reportActivities];
@@ -265,7 +266,11 @@ export function subscribeToNearbyActivities(userCoords, onUpdate, maxItems = 4) 
   );
 
   // 3. Listen to local device emergency alert events for instant reactive refresh
-  const sub = DeviceEventEmitter.addListener('EMERGENCY_ALERT_UPDATED', () => {
+  const sub = DeviceEventEmitter.addListener('EMERGENCY_ALERT_UPDATED', (payload) => {
+    if (payload?.alertId && (payload?.status === 'resolved' || payload?.status === 'cancelled')) {
+      locallyResolvedAlertIds.add(payload.alertId);
+      sosActivities = sosActivities.filter((a) => a.id !== payload.alertId);
+    }
     mergeAndEmit();
   });
 

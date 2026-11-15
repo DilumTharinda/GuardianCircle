@@ -66,6 +66,18 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to log out?');
+      if (confirmed) {
+        try {
+          await logout();
+        } catch (error) {
+          window.alert('Logout Failed: An error occurred while logging out.');
+        }
+      }
+      return;
+    }
+
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {

@@ -129,6 +129,40 @@ export function subscribeToBroadcastNotifications(userRole, onUpdate) {
 }
 
 /**
+ * Alias helper for sending personal notifications
+ */
+export async function sendPersonalNotification({
+  targetUid,
+  title,
+  body = '',
+  message = '',
+  type = 'system',
+  category = 'system',
+  priority = 'normal',
+  senderUid = null,
+  circleId = null,
+  circleName = null,
+  inviteId = null,
+  data = {},
+}) {
+  return dispatchPersonalNotification(targetUid, {
+    title,
+    body: body || message,
+    category: type || category,
+    priority,
+    data: {
+      ...data,
+      type: type || category,
+      senderUid,
+      circleId,
+      circleName,
+      inviteId,
+    },
+    linkRoute: 'TrustedCircle',
+  });
+}
+
+/**
  * Dispatch a personalized notification directly to a user
  */
 export async function dispatchPersonalNotification(targetUid, {

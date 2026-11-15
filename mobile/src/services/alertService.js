@@ -18,6 +18,9 @@ import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
 const MAX_EMERGENCY_ALERT_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
+// In-memory set of locally resolved / cancelled alert IDs to ensure zero-latency eviction across UI
+const locallyResolvedAlertIds = new Set();
+
 /**
  * Checks whether an alert is within the 2-hour active TTL window.
  */
@@ -97,6 +100,7 @@ export async function getAlertHistory(userId) {
  * Real-time subscription to any active SOS alert for a user
  */
 export function subscribeToUserActiveAlert(userId, onUpdate) {
+  let unsubFirestore = () => {};
   try {
     const q = query(
       collection(db, 'Alerts'),
@@ -105,13 +109,18 @@ export function subscribeToUserActiveAlert(userId, onUpdate) {
       limit(1)
     );
 
-    return onSnapshot(
+    unsubFirestore = onSnapshot(
       q,
       (snap) => {
         if (!snap.empty) {
-          const docData = snap.docs[0].data();
+          const docSnap = snap.docs[0];
+          if (locallyResolvedAlertIds.has(docSnap.id)) {
+            onUpdate(null);
+            return;
+          }
+          const docData = docSnap.data();
           onUpdate({
-            id: snap.docs[0].id,
+            id: docSnap.id,
             ...docData,
             timestamp: docData.timestamp?.toDate?.()?.toISOString() || docData.timestamp,
           });
@@ -123,36 +132,44 @@ export function subscribeToUserActiveAlert(userId, onUpdate) {
         // Fallback gracefully to local storage if Firestore permissions restrict unauthenticated live snapshot
         try {
           const localAlerts = await getLocalAlerts();
-          const activeLocal = localAlerts.find((a) => a.userId === userId && a.status === 'active');
+          const activeLocal = localAlerts.find(
+            (a) => a.userId === userId && a.status === 'active' && !locallyResolvedAlertIds.has(a.id)
+          );
           onUpdate(activeLocal || null);
         } catch (e) {}
       }
     );
   } catch (e) {
-    return () => {};
+    unsubFirestore = () => {};
   }
+
+  // Also listen to local resolution events to clear active alert immediately without network lag
+  const sub = DeviceEventEmitter.addListener('EMERGENCY_ALERT_UPDATED', (payload) => {
+    if (payload?.status === 'resolved' || payload?.status === 'cancelled') {
+      onUpdate(null);
+    }
+  });
+
+  return () => {
+    unsubFirestore?.();
+    sub?.remove?.();
+  };
 }
 
 /**
  * Resolve an active SOS alert
  */
 export async function resolveAlert(alertId, resolutionNote = 'User confirmed safe') {
-  try {
-    const alertRef = doc(db, 'Alerts', alertId);
-    await updateDoc(alertRef, {
-      status: 'resolved',
-      resolvedAt: serverTimestamp(),
-      resolutionNote,
-    });
-  } catch (err) {
-    console.warn('[alertService] Firestore updateDoc failed, updating local state:', err);
-  }
+  if (!alertId) return false;
 
-  // Update in local AsyncStorage cache
+  // Mark in local eviction set immediately
+  locallyResolvedAlertIds.add(alertId);
+
+  // 1. Instantly update in local AsyncStorage cache and emit event to immediately remove map markers
   try {
     const localAlerts = await getLocalAlerts();
     const updated = localAlerts.map((a) =>
-      a.id === alertId
+      (a.id === alertId || (!a.id && alertId.startsWith('sos_')))
         ? {
             ...a,
             status: 'resolved',
@@ -162,9 +179,22 @@ export async function resolveAlert(alertId, resolutionNote = 'User confirmed saf
         : a
     );
     await AsyncStorage.setItem(LOCAL_ALERTS_KEY, JSON.stringify(updated));
+    await AsyncStorage.removeItem('@guardiancircle_current_active_sos');
     DeviceEventEmitter.emit('EMERGENCY_ALERT_UPDATED', { alertId, status: 'resolved' });
   } catch (e) {
     console.warn('[alertService] Local alert resolve save error:', e);
+  }
+
+  // 2. Cloud update in Firestore Alerts collection
+  try {
+    const alertRef = doc(db, 'Alerts', alertId);
+    await updateDoc(alertRef, {
+      status: 'resolved',
+      resolvedAt: serverTimestamp(),
+      resolutionNote,
+    });
+  } catch (err) {
+    console.warn('[alertService] Firestore updateDoc failed, updated local state:', err);
   }
 
   // Record in Audit Log
@@ -182,21 +212,16 @@ export async function resolveAlert(alertId, resolutionNote = 'User confirmed saf
  * Cancel an active SOS alert (e.g. false alarm)
  */
 export async function cancelAlert(alertId, cancelReason = 'False trigger cancelled by user') {
-  try {
-    const alertRef = doc(db, 'Alerts', alertId);
-    await updateDoc(alertRef, {
-      status: 'cancelled',
-      cancelledAt: serverTimestamp(),
-      cancelReason,
-    });
-  } catch (err) {
-    console.warn('[alertService] Firestore cancel failed, updating local state:', err);
-  }
+  if (!alertId) return false;
 
+  // Mark in local eviction set immediately
+  locallyResolvedAlertIds.add(alertId);
+
+  // 1. Instantly update in local AsyncStorage cache and emit event
   try {
     const localAlerts = await getLocalAlerts();
     const updated = localAlerts.map((a) =>
-      a.id === alertId
+      (a.id === alertId || (!a.id && alertId.startsWith('sos_')))
         ? {
             ...a,
             status: 'cancelled',
@@ -206,9 +231,22 @@ export async function cancelAlert(alertId, cancelReason = 'False trigger cancell
         : a
     );
     await AsyncStorage.setItem(LOCAL_ALERTS_KEY, JSON.stringify(updated));
+    await AsyncStorage.removeItem('@guardiancircle_current_active_sos');
     DeviceEventEmitter.emit('EMERGENCY_ALERT_UPDATED', { alertId, status: 'resolved' });
   } catch (e) {
     console.warn('[alertService] Local alert cancel save error:', e);
+  }
+
+  // 2. Cloud update in Firestore Alerts collection
+  try {
+    const alertRef = doc(db, 'Alerts', alertId);
+    await updateDoc(alertRef, {
+      status: 'cancelled',
+      cancelledAt: serverTimestamp(),
+      cancelReason,
+    });
+  } catch (err) {
+    console.warn('[alertService] Firestore cancel failed, updated local state:', err);
   }
 
   // Record in Audit Log
@@ -246,21 +284,21 @@ export function subscribeToActiveEmergencyAlerts(onUpdate) {
     try {
       const localList = await getLocalAlerts();
       localActive = (Array.isArray(localList) ? localList : []).filter(
-        (a) => a && a.status === 'active'
+        (a) => a && a.status === 'active' && !locallyResolvedAlertIds.has(a.id)
       );
     } catch (_) {}
 
     const map = new Map();
-    // 1. Add Firestore alerts (must be active and within 2 hours)
+    // 1. Add Firestore alerts (must be active, within 2 hours, and not locally marked resolved)
     firestoreAlerts.forEach((a) => {
-      if (a && a.id && a.status === 'active' && isAlertWithinTwoHours(a)) {
+      if (a && a.id && a.status === 'active' && !locallyResolvedAlertIds.has(a.id) && isAlertWithinTwoHours(a)) {
         map.set(a.id, a);
       }
     });
-    // 2. Add local alerts (must be active and within 2 hours)
+    // 2. Add local alerts (must be active, within 2 hours, and not locally marked resolved)
     localActive.forEach((a) => {
       const id = a.id || 'local_active_sos';
-      if (!map.has(id) && a.status === 'active' && isAlertWithinTwoHours(a)) {
+      if (!map.has(id) && a.status === 'active' && !locallyResolvedAlertIds.has(id) && isAlertWithinTwoHours(a)) {
         map.set(id, { ...a, id });
       }
     });
@@ -282,11 +320,13 @@ export function subscribeToActiveEmergencyAlerts(onUpdate) {
         firestoreAlerts = [];
         snap.forEach((d) => {
           const data = d.data();
-          firestoreAlerts.push({
-            id: d.id,
-            ...data,
-            timestamp: data.timestamp?.toDate?.()?.toISOString() || data.timestamp,
-          });
+          if (!locallyResolvedAlertIds.has(d.id)) {
+            firestoreAlerts.push({
+              id: d.id,
+              ...data,
+              timestamp: data.timestamp?.toDate?.()?.toISOString() || data.timestamp,
+            });
+          }
         });
         broadcastCombined();
       },
@@ -303,7 +343,11 @@ export function subscribeToActiveEmergencyAlerts(onUpdate) {
   broadcastCombined();
 
   // Also listen for local dispatch and cancellation events
-  const sub = DeviceEventEmitter.addListener('EMERGENCY_ALERT_UPDATED', () => {
+  const sub = DeviceEventEmitter.addListener('EMERGENCY_ALERT_UPDATED', (payload) => {
+    if (payload?.alertId && (payload?.status === 'resolved' || payload?.status === 'cancelled')) {
+      locallyResolvedAlertIds.add(payload.alertId);
+      firestoreAlerts = firestoreAlerts.filter((a) => a.id !== payload.alertId);
+    }
     broadcastCombined();
   });
 

@@ -24,6 +24,10 @@ import {
   markAllNotificationsAsRead,
   deletePersonalNotification,
 } from '../../services/notificationCenterService';
+import {
+  acceptCircleInvitation,
+  declineCircleInvitation,
+} from '../../services/trustedCircleGroupService';
 import { formatRelativeTime } from '../../services/circleFindService';
 
 export default function NotificationsScreen({ navigation }) {
@@ -35,6 +39,7 @@ export default function NotificationsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'sos' | 'circlefind' | 'alerts'
+  const [processingInvites, setProcessingInvites] = useState({});
 
   // Real-time synchronization
   useEffect(() => {
@@ -95,6 +100,56 @@ export default function NotificationsScreen({ navigation }) {
     setBroadcastNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  const handleAcceptInvite = async (item) => {
+    const circleId = item.data?.circleId;
+    const inviteId = item.data?.inviteId;
+    if (!circleId || !user) return;
+
+    setProcessingInvites((prev) => ({ ...prev, [item.id]: 'accepting' }));
+    try {
+      await acceptCircleInvitation(circleId, inviteId, user);
+      await markNotificationAsRead(user.uid, item.id, item.isPersonal);
+      if (item.isPersonal) {
+        setPersonalNotifs((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true, inviteStatus: 'accepted' } : n)));
+      }
+      navigate(ROUTES.TRUSTED_CIRCLE, {
+        circleId,
+        inviteId,
+      });
+    } catch (err) {
+      console.warn('[NotificationsScreen] Accept invite error:', err?.message || err);
+    } finally {
+      setProcessingInvites((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+    }
+  };
+
+  const handleDeclineInvite = async (item) => {
+    const circleId = item.data?.circleId;
+    const inviteId = item.data?.inviteId;
+    if (!circleId) return;
+
+    setProcessingInvites((prev) => ({ ...prev, [item.id]: 'declining' }));
+    try {
+      await declineCircleInvitation(circleId, inviteId, user?.email);
+      if (user?.uid && item.isPersonal) {
+        await deletePersonalNotification(user.uid, item.id);
+        setPersonalNotifs((prev) => prev.filter((n) => n.id !== item.id));
+      }
+    } catch (err) {
+      console.warn('[NotificationsScreen] Decline invite error:', err?.message || err);
+    } finally {
+      setProcessingInvites((prev) => {
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+    }
+  };
+
   const handleNotificationPress = async (item) => {
     if (!item.read) {
       await markNotificationAsRead(user?.uid, item.id, item.isPersonal);
@@ -106,7 +161,13 @@ export default function NotificationsScreen({ navigation }) {
     }
 
     // Deep-link to target screen
-    if (item.data?.screen) {
+    if (item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE' || item.data?.circleId) {
+      navigate(ROUTES.TRUSTED_CIRCLE, {
+        circleId: item.data?.circleId,
+        inviteId: item.data?.inviteId,
+        circleName: item.data?.circleName,
+      });
+    } else if (item.data?.screen) {
       navigate(item.data.screen, item.data.params || {});
     } else if (item.data?.reportId) {
       navigate(ROUTES.CIRCLE_FIND_DETAIL, { reportId: item.data.reportId });
@@ -134,9 +195,11 @@ export default function NotificationsScreen({ navigation }) {
     const isUnread = !item.read;
     const isSos = item.category === 'sos';
     const isCircleFind = item.category === 'circlefind';
+    const isCircleInvite = item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE';
 
-    const iconName = isSos ? 'warning' : isCircleFind ? 'search' : 'notifications';
-    const iconColor = isSos ? colors.dangerRed : isCircleFind ? colors.darkGreenMid : '#1976D2';
+    const iconName = isSos ? 'warning' : isCircleFind ? 'search' : isCircleInvite ? 'people' : 'notifications';
+    const iconColor = isSos ? colors.dangerRed : isCircleFind ? colors.darkGreenMid : isCircleInvite ? '#0D7C66' : '#1976D2';
+    const isProcessing = processingInvites[item.id];
 
     return (
       <TouchableOpacity
@@ -159,6 +222,40 @@ export default function NotificationsScreen({ navigation }) {
           <Text style={styles.itemBody} numberOfLines={2}>
             {cleanText(item.body)}
           </Text>
+
+          {isCircleInvite && (
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity
+                style={[styles.inviteAcceptBtn, { backgroundColor: colors.darkGreenMid || '#0D7C66' }]}
+                disabled={!!isProcessing}
+                onPress={() => handleAcceptInvite(item)}
+              >
+                {isProcessing === 'accepting' ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                    <Text style={styles.inviteBtnTextWhite}>Accept</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.inviteDeclineBtn, { borderColor: colors.border || '#DDD' }]}
+                disabled={!!isProcessing}
+                onPress={() => handleDeclineInvite(item)}
+              >
+                {isProcessing === 'declining' ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <>
+                    <Ionicons name="close-circle-outline" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={[styles.inviteBtnTextMuted, { color: colors.textSecondary }]}>Decline</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
           <View style={styles.bottomMetaRow}>
             <Text style={styles.timeText}>
@@ -423,6 +520,37 @@ const getStyles = (colors, isDark) =>
       fontSize: 12,
       color: colors.textSecondary,
       lineHeight: 16,
+    },
+    actionButtonsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    inviteAcceptBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: RADIUS.md || 8,
+    },
+    inviteBtnTextWhite: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    inviteDeclineBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: RADIUS.md || 8,
+      borderWidth: 1,
+    },
+    inviteBtnTextMuted: {
+      fontSize: 12,
+      fontWeight: '600',
     },
     bottomMetaRow: {
       flexDirection: 'row',

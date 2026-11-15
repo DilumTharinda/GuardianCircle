@@ -40,6 +40,8 @@ import { getRouteCandidates, rankRouteCandidates } from '../../services/saferRou
 import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
 import { subscribeToActiveEmergencyAlerts } from '../../services/alertService';
+import { subscribeCircleMembersLocations } from '../../services/circleTrackingService';
+import CircleMapTrackerBar from '../../components/journey/CircleMapTrackerBar';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -73,17 +75,19 @@ async function searchPlaceCoordinates(query) {
   if (!query || typeof query !== 'string' || !query.trim()) return null;
   const clean = query.trim();
 
-  // 1. Try native Expo Location geocoder (uses Google Play Services / Apple Maps)
-  try {
-    const results = await Location.geocodeAsync(clean);
-    if (results && results.length > 0 && typeof results[0].latitude === 'number') {
-      return {
-        latitude: results[0].latitude,
-        longitude: results[0].longitude,
-        name: clean,
-      };
-    }
-  } catch (_) {}
+  // 1. Try native Expo Location geocoder on native platforms (uses Google Play Services / Apple Maps)
+  if (Platform.OS !== 'web') {
+    try {
+      const results = await Location.geocodeAsync(clean);
+      if (results && results.length > 0 && typeof results[0].latitude === 'number') {
+        return {
+          latitude: results[0].latitude,
+          longitude: results[0].longitude,
+          name: clean,
+        };
+      }
+    } catch (_) {}
+  }
 
   // 2. Reliable fallback to OpenStreetMap Nominatim geocoding API
   try {
@@ -165,16 +169,16 @@ async function fetchPlaceSuggestions(query) {
 function getZoomMetrics(level) {
   switch (level) {
     case 5: // Very close street / road view (< 0.003 delta)
-      return { level: 5, humanSize: 52, warningSize: 32, badgeSize: 64, ringD: 64, containerSize: 154 };
+      return { level: 5, humanSize: 130, nameFontSize: 15, warningSize: 56, badgeSize: 110, ringD: 140, containerSize: 260 };
     case 4: // Close street / neighborhood (< 0.008 delta)
-      return { level: 4, humanSize: 46, warningSize: 28, badgeSize: 54, ringD: 54, containerSize: 130 };
+      return { level: 4, humanSize: 115, nameFontSize: 14, warningSize: 48, badgeSize: 96, ringD: 125, containerSize: 230 };
     case 3: // Suburb / standard default (< 0.025 delta)
-      return { level: 3, humanSize: 40, warningSize: 24, badgeSize: 48, ringD: 48, containerSize: 116 };
+      return { level: 3, humanSize: 100, nameFontSize: 13, warningSize: 40, badgeSize: 84, ringD: 110, containerSize: 200 };
     case 2: // City view (< 0.08 delta)
-      return { level: 2, humanSize: 34, warningSize: 20, badgeSize: 40, ringD: 40, containerSize: 96 };
+      return { level: 2, humanSize: 85, nameFontSize: 12, warningSize: 32, badgeSize: 70, ringD: 95, containerSize: 170 };
     case 1: // State / country view (>= 0.08 delta)
     default:
-      return { level: 1, humanSize: 28, warningSize: 16, badgeSize: 34, ringD: 34, containerSize: 82 };
+      return { level: 1, humanSize: 70, nameFontSize: 11, warningSize: 26, badgeSize: 58, ringD: 80, containerSize: 140 };
   }
 }
 
@@ -252,6 +256,43 @@ export default function MapScreen({ navigation, route }) {
 
   // Active Emergency SOS Alerts (only shown while active; removed immediately when resolved or cancelled)
   const [activeEmergencyAlerts, setActiveEmergencyAlerts] = useState([]);
+
+  // Active Trusted Circle Tracking State (passed via route params e.g. from TrustedCircleScreen)
+  const [activeCircleTracker, setActiveCircleTracker] = useState(
+    route?.params?.selectedCircleId
+      ? {
+          circleId: route.params.selectedCircleId,
+          circleName: route.params.selectedCircleName,
+          memberUids: route.params.memberUids || [],
+        }
+      : null
+  );
+  const [circleMembersLocations, setCircleMembersLocations] = useState([]);
+
+  // Update active circle when route params change
+  useEffect(() => {
+    if (route?.params?.selectedCircleId) {
+      setActiveCircleTracker({
+        circleId: route.params.selectedCircleId,
+        circleName: route.params.selectedCircleName,
+        memberUids: route.params.memberUids || [],
+      });
+    }
+  }, [route?.params?.selectedCircleId, route?.params?.selectedCircleName]);
+
+  // Subscribe to Circle Members' live locations when a circle is active
+  useEffect(() => {
+    if (!activeCircleTracker?.memberUids || activeCircleTracker.memberUids.length === 0) {
+      setCircleMembersLocations([]);
+      return;
+    }
+    // Filter out current user so user isn't duplicated
+    const otherMemberUids = activeCircleTracker.memberUids.filter((uid) => uid !== user?.uid);
+    const unsub = subscribeCircleMembersLocations(otherMemberUids, (locations) => {
+      setCircleMembersLocations(locations);
+    });
+    return () => unsub?.();
+  }, [activeCircleTracker, user?.uid]);
 
   useEffect(() => {
     const unsub = subscribeToActiveEmergencyAlerts((alerts) => {
@@ -979,58 +1020,67 @@ export default function MapScreen({ navigation, route }) {
               tracksViewChanges={true}
               zIndex={999}
             >
-              <View
-                style={[
-                  styles.userMarkerContainer,
-                  {
-                    width: zoomMetrics.containerSize,
-                    height: zoomMetrics.containerSize,
-                  },
-                ]}
-              >
-                {/* Outer Pulse Ring (Ring 2) — delayed 550ms */}
-                <Animated.View
-                  style={[
-                    styles.userPulseRingBase,
-                    {
-                      width: zoomMetrics.ringD,
-                      height: zoomMetrics.ringD,
-                      borderRadius: zoomMetrics.ringD / 2,
-                      transform: [{ scale: ring2Scale }],
-                      opacity: ring2Opacity,
-                    },
-                  ]}
-                />
+              <View style={styles.customMarkerWrapper}>
+                {/* When viewing a Trusted Circle on map, display "You" pill very near top side of human icon */}
+                {activeCircleTracker && (
+                  <View style={[styles.markerNamePill, { marginBottom: 2 }]}>
+                    <Text style={[styles.markerNameText, { fontSize: zoomMetrics.nameFontSize }]}>You</Text>
+                  </View>
+                )}
 
-                {/* Inner Pulse Ring (Ring 1) */}
-                <Animated.View
+                <View
                   style={[
-                    styles.userPulseRingBase,
+                    styles.userMarkerContainer,
                     {
-                      width: zoomMetrics.ringD,
-                      height: zoomMetrics.ringD,
-                      borderRadius: zoomMetrics.ringD / 2,
-                      transform: [{ scale: ring1Scale }],
-                      opacity: ring1Opacity,
-                    },
-                  ]}
-                />
-
-                {/* Clean White Human Icon (NO green circle) */}
-                <Animated.View
-                  style={[
-                    styles.humanMarkerBadge,
-                    {
-                      transform: [{ scale: coreScale }],
+                      width: zoomMetrics.humanSize + 20,
+                      height: zoomMetrics.humanSize + 20,
                     },
                   ]}
                 >
-                  <MaterialIcons
-                    name={isMoving ? 'directions-walk' : 'man'}
-                    size={zoomMetrics.humanSize}
-                    color="#FFFFFF"
+                  {/* Outer Pulse Ring (Ring 2) — delayed 550ms */}
+                  <Animated.View
+                    style={[
+                      styles.userPulseRingBase,
+                      {
+                        width: zoomMetrics.ringD,
+                        height: zoomMetrics.ringD,
+                        borderRadius: zoomMetrics.ringD / 2,
+                        transform: [{ scale: ring2Scale }],
+                        opacity: ring2Opacity,
+                      },
+                    ]}
                   />
-                </Animated.View>
+
+                  {/* Inner Pulse Ring (Ring 1) */}
+                  <Animated.View
+                    style={[
+                      styles.userPulseRingBase,
+                      {
+                        width: zoomMetrics.ringD,
+                        height: zoomMetrics.ringD,
+                        borderRadius: zoomMetrics.ringD / 2,
+                        transform: [{ scale: ring1Scale }],
+                        opacity: ring1Opacity,
+                      },
+                    ]}
+                  />
+
+                  {/* Clean White Human Icon (NO green circle) */}
+                  <Animated.View
+                    style={[
+                      styles.humanMarkerBadge,
+                      {
+                        transform: [{ scale: coreScale }],
+                      },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={isMoving ? 'directions-walk' : 'man'}
+                      size={zoomMetrics.humanSize}
+                      color="#FFFFFF"
+                    />
+                  </Animated.View>
+                </View>
               </View>
             </Marker>
           )}
@@ -1108,6 +1158,7 @@ export default function MapScreen({ navigation, route }) {
 
           {/* 2b. Active Emergency SOS Alerts (Unique Emergency Megaphone / Siren Icon, Distinct Red Glow, Only shown while active) */}
           {activeEmergencyAlerts.map((alert) => {
+            if (!alert || (alert.status && alert.status !== 'active')) return null;
             const loc = alert.location || {};
             const lat = typeof loc.latitude === 'number' ? loc.latitude : loc.lat;
             const lng = typeof loc.longitude === 'number' ? loc.longitude : loc.lng;
@@ -1184,6 +1235,62 @@ export default function MapScreen({ navigation, route }) {
               </Marker>
             );
           })}
+
+          {/* 2c. Live Trusted Circle Members Tracking (Yellow #FFD600 Human Icon with Display Name above, NO pulse rings) */}
+          {activeCircleTracker && circleMembersLocations.map((member) => (
+            <Marker
+              key={`circle-member-${member.uid}-z${zoomMetrics.level}`}
+              coordinate={{ latitude: member.latitude, longitude: member.longitude }}
+              anchor={{ x: 0.5, y: 0.7 }}
+              zIndex={60}
+              tracksViewChanges={true}
+              onPress={() => {
+                Alert.alert(
+                  `👤 ${member.displayName}`,
+                  `Status: ${member.isMoving ? '🚶 Walking / In Motion' : '🧍 Stationary'}\nLocation: ${member.latitude.toFixed(4)}, ${member.longitude.toFixed(4)}`,
+                  [
+                    { text: 'Close', style: 'cancel' },
+                    {
+                      text: `Navigate to ${member.displayName}`,
+                      onPress: () => {
+                        handleRouteToDestination({
+                          latitude: member.latitude,
+                          longitude: member.longitude,
+                          name: member.displayName,
+                        });
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <View style={styles.customMarkerWrapper}>
+                {/* Display Circle Member's Display Name Pill very near top of human icon */}
+                <View
+                  style={[
+                    styles.markerNamePill,
+                    { borderColor: 'rgba(255, 214, 0, 0.6)', marginBottom: 1 },
+                  ]}
+                >
+                  <Text
+                    style={[styles.markerNameText, { color: '#FFD600', fontSize: zoomMetrics.nameFontSize }]}
+                    numberOfLines={1}
+                  >
+                    {member.displayName || 'Member'}
+                  </Text>
+                </View>
+
+                {/* Clean Yellow Human Icon (NO ring animation, only for my location) */}
+                <View style={styles.humanMarkerBadge}>
+                  <MaterialIcons
+                    name={member.isMoving ? 'directions-walk' : 'man'}
+                    size={zoomMetrics.humanSize}
+                    color="#FFD600"
+                  />
+                </View>
+              </View>
+            </Marker>
+          ))}
 
           {/* 3. Highlighted Route Path (Google Maps Style) */}
           {activeRoute && Polyline && (
@@ -1320,6 +1427,21 @@ export default function MapScreen({ navigation, route }) {
               </TouchableOpacity>
             ))}
           </View>
+        )}
+
+        {/* Active Trusted Circle Tracker Bar */}
+        {activeCircleTracker && (
+          <CircleMapTrackerBar
+            circleName={activeCircleTracker.circleName}
+            memberCount={circleMembersLocations.length + 1}
+            onClose={() => {
+              setActiveCircleTracker(null);
+              setCircleMembersLocations([]);
+            }}
+            onChangeCircle={() => {
+              navigation.navigate('TrustedCircle');
+            }}
+          />
         )}
 
         {/* Floating Route Summary Banner (Single Cancel button in top-left, no duplicate here) */}
@@ -1503,6 +1625,10 @@ const getStyles = (colors, isDark, insets) => {
     },
     statusContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
     statusTitle: { fontSize: 20, fontWeight: 'bold', color: colors.textPrimary, textAlign: 'center', marginTop: 10 },
+    customMarkerWrapper: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     userMarkerContainer: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -1527,6 +1653,28 @@ const getStyles = (colors, isDark, insets) => {
       shadowOpacity: 0.95,
       shadowRadius: 4,
       elevation: 7,
+    },
+    markerNamePill: {
+      alignSelf: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      paddingHorizontal: 7,
+      paddingVertical: 1.5,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.45)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.6,
+      shadowRadius: 2,
+      elevation: 8,
+      zIndex: 20,
+    },
+    markerNameText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: 'bold',
+      letterSpacing: 0.2,
+      textAlign: 'center',
     },
     warningMarkerContainer: {
       alignItems: 'center',

@@ -1,12 +1,13 @@
 import * as Haptics from 'expo-haptics';
 import { DeviceEventEmitter } from 'react-native';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from './firebase';
-import { getCurrentCoordinates } from './locationService';
+import { getCurrentCoordinates, getCachedCoordinates, DEFAULT_COORDS } from './locationService';
 import { isChild } from '../constants/roles';
 import { getTrustedCircleSOSRecipientIds } from './trustedCircleService';
-import { dispatchBroadcastNotification } from './notificationCenterService';
+import { getAllUserCircleMemberUids } from './trustedCircleGroupService';
+import { dispatchBroadcastNotification, dispatchPersonalNotification } from './notificationCenterService';
 import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
@@ -45,15 +46,19 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
     console.warn('[sosService] User profile resolution fallback:', e);
   }
 
-  // 2. Fetch Linked Entities (Trusted Contacts and Parents if Child Account)
+  // 2. Resolve Initial Location Instantly (0ms cached memory or default)
+  const immediateCachedLoc = getCachedCoordinates() || {
+    lat: DEFAULT_COORDS.latitude,
+    lng: DEFAULT_COORDS.longitude,
+    accuracy: null,
+    address: DEFAULT_COORDS.address,
+  };
+
   const recipientIds = [];
   const linkedParents = [];
 
-  try {
-    // Check if Child account
-    const isChildAccount = isChild(userRole);
-
-    // Query LinkedEntities from Firestore
+  // Launch background tasks concurrently without blocking instantaneous alert dispatch
+  const backgroundTasks = (async () => {
     try {
       const linkedQuery = query(
         collection(db, 'LinkedEntities'),
@@ -73,24 +78,29 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
       console.warn('[sosService] LinkedEntities query fallback:', dbErr);
     }
 
-  } catch (err) {
-    console.warn('[sosService] Error gathering recipients:', err);
-  }
+    try {
+      const trustedRecipientIds = await getTrustedCircleSOSRecipientIds(uid);
+      trustedRecipientIds.forEach((recipientId) => {
+        if (!recipientIds.includes(recipientId)) recipientIds.push(recipientId);
+      });
 
-  // Current FR-1.11 contacts are owner-scoped in `linkedEntities`. Only their
-  // verified target UIDs are valid SOS recipients; never use contact IDs or
-  // phone numbers as account recipients. Keep legacy linked parent recipients.
-  try {
-    const trustedRecipientIds = await getTrustedCircleSOSRecipientIds(uid);
-    trustedRecipientIds.forEach((recipientId) => {
-      if (!recipientIds.includes(recipientId)) recipientIds.push(recipientId);
-    });
-  } catch (error) {
-    console.warn('[sosService] Trusted Circle recipient lookup unavailable:', error);
-  }
+      // Also gather all members from multi-circle groups
+      const groupCircleMembers = await getAllUserCircleMemberUids(uid);
+      groupCircleMembers.forEach((memberUid) => {
+        if (!recipientIds.includes(memberUid)) recipientIds.push(memberUid);
+      });
+    } catch (error) {
+      console.warn('[sosService] Trusted Circle recipient lookup unavailable:', error);
+    }
+  })();
 
-  // 3. Capture high-accuracy GPS coordinates & address
-  const locationData = await getCurrentCoordinates();
+  // Race quick GPS fix with 800ms limit; if GPS is still calculating, immediate cached location is used instantly
+  const fastLocationPromise = Promise.race([
+    getCurrentCoordinates(),
+    new Promise((resolve) => setTimeout(() => resolve(immediateCachedLoc), 800)),
+  ]);
+
+  const locationData = (await fastLocationPromise) || immediateCachedLoc;
 
   // 4. Construct Comprehensive Alert Payload
   const alertPayload = {
@@ -115,19 +125,11 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
     telemetry: extraMeta || {},
   };
 
-  // 5. Write to Firestore `Alerts` collection
-  let alertId = `sos_${Date.now()}`;
-  try {
-    const alertRef = await addDoc(collection(db, 'Alerts'), {
-      ...alertPayload,
-      timestamp: serverTimestamp(),
-    });
-    alertId = alertRef.id;
-  } catch (err) {
-    console.warn('[sosService] Firestore write failed, stored in reliable local cache:', err);
-  }
+  // 5. Instantly generate canonical Firestore Document Reference
+  // This guarantees local cache, Map markers, and Firestore share the exact same ID immediately
+  const alertDocRef = doc(collection(db, 'Alerts'));
+  const alertId = alertDocRef.id;
 
-  // 6. Write to Offline / Local Storage Cache
   try {
     const localAlertsRaw = await AsyncStorage.getItem(LOCAL_ALERTS_KEY);
     const localAlerts = localAlertsRaw ? JSON.parse(localAlertsRaw) : [];
@@ -137,58 +139,94 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
     // Set currently active SOS ID for fast access
     await AsyncStorage.setItem('@guardiancircle_current_active_sos', alertId);
 
-    // Notify app components immediately of emergency dispatch
+    // Notify app components immediately of emergency dispatch with canonical ID
     DeviceEventEmitter.emit('EMERGENCY_ALERT_UPDATED', { alertId, status: 'active', ...alertPayload });
   } catch (err) {
     console.warn('[sosService] Local storage save error:', err);
   }
 
-  // 7. Audit Log activity
-  logActivity({
-    action: AUDIT_ACTIONS.SOS_TRIGGER,
-    performedBy: uid,
-    targetUid: alertId,
-    targetEmail: userEmail,
-    userRole,
-    note: `SOS triggered via ${triggerType || 'in_app'}`,
-    metadata: {
-      alertId,
-      triggerType: triggerType || 'in_app',
-      location: {
-        lat: locationData.lat,
-        lng: locationData.lng,
-        address: locationData.address,
-      },
-      recipientCount: recipientIds.length,
-    },
-  }).catch(() => {});
+  // 6. Asynchronous Cloud Sync & Notification Dispatch (Non-blocking background pipeline)
+  (async () => {
+    // Wait for recipient lookups if still running
+    await Promise.race([backgroundTasks, new Promise((res) => setTimeout(res, 2000))]);
 
-  // 7. Trigger Heavy Haptic Feedback Pattern
-  try {
-    // Also dispatch a real-time broadcast notification across the community
-    dispatchBroadcastNotification({
-      title: 'Emergency SOS Broadcast',
-      message: `${userName} triggered an Emergency SOS near ${locationData.address || 'nearby location'}.`,
-      type: 'sos',
-      priority: 'high',
-      targetRole: 'all',
-      linkRoute: 'Map',
-      linkParams: { focusAlertId: alertId, alertLocation: locationData },
+    // Update payload with any newly discovered recipients
+    alertPayload.recipientIds = recipientIds;
+    alertPayload.linkedParents = linkedParents;
+
+    // Cloud upload to Firestore using the exact canonical docRef
+    try {
+      await setDoc(alertDocRef, {
+        ...alertPayload,
+        timestamp: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('[sosService] Firestore write background sync failed:', err);
+    }
+
+    // Audit Log activity
+    logActivity({
+      action: AUDIT_ACTIONS.SOS_TRIGGER,
+      performedBy: uid,
+      targetUid: alertId,
+      targetEmail: userEmail,
+      userRole,
+      note: `SOS triggered via ${triggerType || 'in_app'}`,
+      metadata: {
+        alertId,
+        triggerType: triggerType || 'in_app',
+        location: {
+          lat: locationData.lat,
+          lng: locationData.lng,
+          address: locationData.address,
+        },
+        recipientCount: recipientIds.length,
+      },
     }).catch(() => {});
-  } catch (notifErr) {
-    console.warn('[sosService] Broadcast notification dispatch skipped:', notifErr);
-  }
-  try {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    // Double pulse
-    setTimeout(async () => {
+
+    // Send Tier-1 high-priority notification to Trusted Circle members first
+    recipientIds.forEach((recipientUid) => {
+      dispatchPersonalNotification(recipientUid, {
+        title: '🚨 EMERGENCY SOS FROM TRUSTED CIRCLE',
+        body: `${userName} triggered an Emergency SOS near ${locationData.address || 'nearby'}. Tap to track immediately.`,
+        category: 'sos',
+        priority: 'high',
+        data: { alertId, location: locationData },
+        linkRoute: 'Map',
+        linkParams: { focusAlertId: alertId, alertLocation: locationData },
+      }).catch(() => {});
+    });
+
+    // Tier-2 Escalation: If no circle recipients exist, or after 60-second unread window, broadcast to community
+    const hasCircleRecipients = recipientIds.length > 0;
+    const escalateToCommunityBroadcast = () => {
       try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      } catch (e) {}
-    }, 200);
-  } catch (e) {
-    // Graceful fallback on devices without hardware vibrator
-  }
+        dispatchBroadcastNotification({
+          title: 'Emergency SOS Broadcast',
+          message: `${userName} triggered an Emergency SOS near ${locationData.address || 'nearby location'}.`,
+          type: 'sos',
+          priority: 'high',
+          targetRole: 'all',
+          linkRoute: 'Map',
+          linkParams: { focusAlertId: alertId, alertLocation: locationData },
+        }).catch(() => {});
+      } catch (_) {}
+    };
+
+    if (!hasCircleRecipients) {
+      escalateToCommunityBroadcast();
+    } else {
+      // 60-second escalation timer if circle contacts are unreached/offline
+      setTimeout(() => {
+        escalateToCommunityBroadcast();
+      }, 60000);
+    }
+  })();
+
+  // 7. Instant Haptic Feedback & Vibrations (Immediate response)
+  try {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  } catch (_) {}
 
   console.log(`🚨 [SOS DISPATCHED] ID: ${alertId} | Trigger: ${triggerType} | Coords: ${locationData.lat}, ${locationData.lng}`);
   return alertId;

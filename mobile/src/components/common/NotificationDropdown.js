@@ -97,7 +97,13 @@ export default function NotificationDropdown({
     }
     onClose();
 
-    if (item.data?.screen) {
+    if (item.category === 'TRUSTED_CIRCLE_INVITE' || item.data?.type === 'TRUSTED_CIRCLE_INVITE' || item.data?.circleId) {
+      navigate(ROUTES.TRUSTED_CIRCLE, {
+        circleId: item.data?.circleId,
+        inviteId: item.data?.inviteId,
+        circleName: item.data?.circleName,
+      });
+    } else if (item.data?.screen) {
       navigate(item.data.screen, item.data.params || {});
     } else if (item.data?.reportId) {
       navigate(ROUTES.CIRCLE_FIND_DETAIL, { reportId: item.data.reportId });
