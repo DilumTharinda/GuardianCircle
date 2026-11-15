@@ -33,6 +33,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import NotificationBell from '../../components/common/NotificationBell';
 import ThemeToggle from '../../components/ThemeToggle';
+import { scale, verticalScale, normalize } from '../../utils/responsive';
+import { FONTS, SPACING, RADIUS } from '../../constants/theme';
 
 export default function SafetyScreen() {
   const { user, userProfile } = useAuth();
@@ -186,7 +188,7 @@ export default function SafetyScreen() {
       >
         <View style={styles.headerTitleRow}>
           <Ionicons name="shield" size={22} color="#FFF" />
-          <Text style={styles.headerTitleText}>Safety</Text>
+          <Text style={styles.headerTitleText} numberOfLines={1}>Safety</Text>
         </View>
         <ThemeToggle iconColor="#FFF" style={{ marginRight: 6 }} />
         <NotificationBell iconColor="#FFF" size={20} />
@@ -230,8 +232,8 @@ export default function SafetyScreen() {
             <MaterialIcons name="verified-user" size={24} color={colors.darkGreenMid || '#06756A'} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.statusTitle}>Protection Shield Active</Text>
-            <Text style={styles.statusSubtitle}>
+            <Text style={styles.statusTitle} numberOfLines={1}>Protection Shield Active</Text>
+            <Text style={styles.statusSubtitle} numberOfLines={1} ellipsizeMode="tail">
               Sensors monitoring • Ready to dispatch SOS
             </Text>
           </View>
@@ -240,8 +242,8 @@ export default function SafetyScreen() {
 
       {/* 2. Main SOS Button Hub */}
       <View style={styles.sosCard}>
-        <Text style={styles.sosHeading}>Tap to Broadcast Emergency</Text>
-        <Text style={styles.sosSubheading}>
+        <Text style={styles.sosHeading} numberOfLines={1}>Tap to Broadcast Emergency</Text>
+        <Text style={styles.sosSubheading} numberOfLines={2}>
           Sends your real-time GPS coordinates and alert to your Trusted Circle & Admin Dashboard.
         </Text>
 
@@ -273,8 +275,8 @@ export default function SafetyScreen() {
           <MaterialIcons name="vibration" size={22} color={colors.darkGreenMid || '#06756A'} />
         </View>
         <View style={styles.triggerInfo}>
-          <Text style={styles.triggerName}>Shake-to-SOS</Text>
-          <Text style={styles.triggerDesc}>Vigorously shake phone to trigger 5s countdown</Text>
+          <Text style={styles.triggerName} numberOfLines={1}>Shake-to-SOS</Text>
+          <Text style={styles.triggerDesc} numberOfLines={1} ellipsizeMode="tail">Vigorously shake phone to trigger 5s countdown</Text>
         </View>
         <Switch
           value={shakeEnabled}
@@ -290,8 +292,8 @@ export default function SafetyScreen() {
           <MaterialCommunityIcons name="car-brake-alert" size={22} color={colors.warnOrange || '#FB8C00'} />
         </View>
         <View style={styles.triggerInfo}>
-          <Text style={styles.triggerName}>Fall & Sudden Stop</Text>
-          <Text style={styles.triggerDesc}>Motion sensor detects abrupt impact with prompt</Text>
+          <Text style={styles.triggerName} numberOfLines={1}>Fall & Sudden Stop</Text>
+          <Text style={styles.triggerDesc} numberOfLines={1} ellipsizeMode="tail">Motion sensor detects abrupt impact with prompt</Text>
         </View>
         <Switch
           value={fallDetectionEnabled}
@@ -307,8 +309,8 @@ export default function SafetyScreen() {
           <MaterialIcons name="volume-up" size={22} color={colors.infoBlue || '#1976D2'} />
         </View>
         <View style={styles.triggerInfo}>
-          <Text style={styles.triggerName}>Triple Volume Press</Text>
-          <Text style={styles.triggerDesc}>3 quick volume presses trigger 5s countdown</Text>
+          <Text style={styles.triggerName} numberOfLines={1}>Triple Volume Press</Text>
+          <Text style={styles.triggerDesc} numberOfLines={1} ellipsizeMode="tail">3 quick volume presses trigger 5s countdown</Text>
         </View>
         <Switch
           value={volumeButtonEnabled}
@@ -329,8 +331,8 @@ export default function SafetyScreen() {
           <View style={[styles.dialIconCircle, { backgroundColor: '#E3F2FD' }]}>
             <MaterialIcons name="local-police" size={24} color="#1976D2" />
           </View>
-          <Text style={styles.dialName}>Police</Text>
-          <Text style={styles.dialNumber}>119</Text>
+          <Text style={styles.dialName} numberOfLines={1}>Police</Text>
+          <Text style={styles.dialNumber} numberOfLines={1}>119</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -341,8 +343,8 @@ export default function SafetyScreen() {
           <View style={[styles.dialIconCircle, { backgroundColor: '#FFEBEE' }]}>
             <MaterialIcons name="medical-services" size={24} color="#E53935" />
           </View>
-          <Text style={styles.dialName}>Ambulance</Text>
-          <Text style={[styles.dialNumber, { color: '#E53935' }]}>1990</Text>
+          <Text style={styles.dialName} numberOfLines={1}>Ambulance</Text>
+          <Text style={[styles.dialNumber, { color: '#E53935' }]} numberOfLines={1}>1990</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -353,8 +355,8 @@ export default function SafetyScreen() {
           <View style={[styles.dialIconCircle, { backgroundColor: '#FFF3E0' }]}>
             <MaterialIcons name="fire-extinguisher" size={24} color="#FB8C00" />
           </View>
-          <Text style={styles.dialName}>Fire & Rescue</Text>
-          <Text style={[styles.dialNumber, { color: '#FB8C00' }]}>110</Text>
+          <Text style={styles.dialName} numberOfLines={1}>Fire & Rescue</Text>
+          <Text style={[styles.dialNumber, { color: '#FB8C00' }]} numberOfLines={1}>110</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -365,8 +367,8 @@ export default function SafetyScreen() {
           <View style={[styles.dialIconCircle, { backgroundColor: '#E8F5E9' }]}>
             <MaterialIcons name="security" size={24} color="#43A047" />
           </View>
-          <Text style={styles.dialName}>Campus Sec</Text>
-          <Text style={[styles.dialNumber, { color: '#43A047' }]}>011-2903903</Text>
+          <Text style={styles.dialName} numberOfLines={1}>Campus Sec</Text>
+          <Text style={[styles.dialNumber, { color: '#43A047' }]} numberOfLines={1}>011-2903903</Text>
         </TouchableOpacity>
       </View>
 
@@ -448,18 +450,18 @@ const getStyles = (colors, isDark, insets) =>
       gap: 8,
     },
     headerTitleText: {
-      fontSize: 18,
+      fontSize: normalize(18),
       fontWeight: 'bold',
       color: '#FFF',
     },
     container: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 16, paddingBottom: 40 },
+    content: { padding: scale(16), paddingBottom: Math.max(insets?.bottom || 0, 24) + 20 },
 
   statusCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: isDark ? (colors.surface || '#1A2420') : '#E8F5E9',
-    padding: 16,
+    padding: scale(16),
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
@@ -479,14 +481,14 @@ const getStyles = (colors, isDark, insets) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusTitle: { fontSize: 15, fontWeight: '700', color: colors.darkGreenMid || '#2E7D32' },
-  statusSubtitle: { fontSize: 12, color: isDark ? colors.textSecondary : '#4CAF50', marginTop: 2 },
+  statusTitle: { fontSize: normalize(15), fontWeight: '700', color: colors.darkGreenMid || '#2E7D32' },
+  statusSubtitle: { fontSize: normalize(12), color: isDark ? colors.textSecondary : '#4CAF50', marginTop: 2 },
 
   activeEmergencyBanner: {
     backgroundColor: isDark ? 'rgba(211, 47, 47, 0.15)' : '#FFEBEE',
     borderWidth: 2,
     borderColor: colors.dangerRed || '#E53935',
-    padding: 16,
+    padding: scale(16),
     borderRadius: 16,
     marginBottom: 16,
   },
@@ -505,20 +507,20 @@ const getStyles = (colors, isDark, insets) =>
     justifyContent: 'center',
   },
   activeAlertTitle: {
-    fontSize: 15,
+    fontSize: normalize(15),
     fontWeight: '900',
     color: colors.dangerRed || '#D32F2F',
     letterSpacing: 0.8,
   },
-  activeAlertText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary || '#333', marginTop: 2 },
+  activeAlertText: { fontSize: normalize(13), fontWeight: '700', color: colors.textPrimary || '#333', marginTop: 2 },
   locRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
   },
-  activeAlertCoords: { fontSize: 13, color: colors.textSecondary || '#555', flex: 1 },
-  activeAlertRecipients: { fontSize: 12, color: colors.textSecondary || '#777', marginTop: 6, fontStyle: 'italic' },
+  activeAlertCoords: { fontSize: normalize(13), color: colors.textSecondary || '#555', flex: 1 },
+  activeAlertRecipients: { fontSize: normalize(12), color: colors.textSecondary || '#777', marginTop: 6, fontStyle: 'italic' },
   resolveBtn: {
     backgroundColor: colors.darkGreenMid || '#2E7D32',
     marginTop: 14,
@@ -533,12 +535,12 @@ const getStyles = (colors, isDark, insets) =>
     shadowRadius: 4,
     elevation: 3,
   },
-  resolveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13, letterSpacing: 0.5 },
+  resolveBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: normalize(13), letterSpacing: 0.5 },
 
   sosCard: {
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 20,
-    padding: 20,
+    padding: scale(20),
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: isDark ? 1 : 0,
@@ -549,14 +551,14 @@ const getStyles = (colors, isDark, insets) =>
     shadowRadius: 10,
     elevation: 4,
   },
-  sosHeading: { fontSize: 18, fontWeight: 'bold', color: colors.textPrimary || '#1A1A1A' },
+  sosHeading: { fontSize: normalize(18), fontWeight: 'bold', color: colors.textPrimary || '#1A1A1A' },
   sosSubheading: {
-    fontSize: 12,
+    fontSize: normalize(12),
     color: colors.textSecondary || '#757575',
     textAlign: 'center',
     marginHorizontal: 12,
     marginTop: 4,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   triggerBadgeRow: {
     flexDirection: 'row',
@@ -573,13 +575,13 @@ const getStyles = (colors, isDark, insets) =>
     borderRadius: 8,
   },
   triggerBadgeText: {
-    fontSize: 11,
+    fontSize: normalize(11),
     fontWeight: '600',
     color: colors.textPrimary || '#424242',
   },
 
   sectionHeader: {
-    fontSize: 15,
+    fontSize: normalize(15),
     fontWeight: '700',
     color: colors.textPrimary || '#37474F',
     marginTop: 8,
@@ -590,7 +592,7 @@ const getStyles = (colors, isDark, insets) =>
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface || '#FFFFFF',
-    padding: 14,
+    padding: scale(14),
     borderRadius: 14,
     marginBottom: 10,
     borderWidth: isDark ? 1 : 0,
@@ -611,8 +613,8 @@ const getStyles = (colors, isDark, insets) =>
     marginRight: 12,
   },
   triggerInfo: { flex: 1, marginRight: 12 },
-  triggerName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary || '#263238' },
-  triggerDesc: { fontSize: 12, color: colors.textSecondary || '#78909C', marginTop: 2 },
+  triggerName: { fontSize: normalize(14), fontWeight: '700', color: colors.textPrimary || '#263238' },
+  triggerDesc: { fontSize: normalize(12), color: colors.textSecondary || '#78909C', marginTop: 2 },
 
   speedDialGrid: {
     flexDirection: 'row',
@@ -624,7 +626,7 @@ const getStyles = (colors, isDark, insets) =>
     width: '48%',
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 14,
-    padding: 12,
+    padding: scale(12),
     borderLeftWidth: 4,
     borderWidth: isDark ? 1 : 0,
     borderColor: colors.border || 'transparent',
@@ -642,24 +644,24 @@ const getStyles = (colors, isDark, insets) =>
     justifyContent: 'center',
     marginBottom: 8,
   },
-  dialName: { fontSize: 13, fontWeight: '700', color: colors.textPrimary || '#263238' },
-  dialNumber: { fontSize: 15, fontWeight: '900', color: '#1E88E5', marginTop: 2 },
+  dialName: { fontSize: normalize(13), fontWeight: '700', color: colors.textPrimary || '#263238' },
+  dialNumber: { fontSize: normalize(15), fontWeight: '900', color: '#1E88E5', marginTop: 2 },
 
   emptyHistoryCard: {
     backgroundColor: colors.surface || '#FFFFFF',
-    padding: 20,
+    padding: scale(20),
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: isDark ? 1 : 0,
     borderColor: colors.border || 'transparent',
   },
-  emptyHistoryText: { fontSize: 12, color: colors.textSecondary || '#90A4AE', fontStyle: 'italic' },
+  emptyHistoryText: { fontSize: normalize(12), color: colors.textSecondary || '#90A4AE', fontStyle: 'italic' },
 
   historyCard: {
     backgroundColor: colors.surface || '#FFFFFF',
     borderRadius: 14,
-    padding: 14,
+    padding: scale(14),
     marginBottom: 10,
     borderWidth: isDark ? 1 : 0,
     borderColor: colors.border || 'transparent',
@@ -674,8 +676,8 @@ const getStyles = (colors, isDark, insets) =>
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  historyType: { fontSize: 12, fontWeight: '800', color: colors.textPrimary || '#37474F' },
-  historyStatus: { fontSize: 10, fontWeight: '800', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
+  historyType: { fontSize: normalize(12), fontWeight: '800', color: colors.textPrimary || '#37474F' },
+  historyStatus: { fontSize: normalize(10), fontWeight: '800', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 },
   statusActive: { backgroundColor: '#FFEBEE', color: '#D32F2F' },
   statusResolved: { backgroundColor: '#E8F5E9', color: '#2E7D32' },
   statusCancelled: { backgroundColor: '#ECEFF1', color: '#78909C' },
@@ -685,6 +687,6 @@ const getStyles = (colors, isDark, insets) =>
     gap: 4,
     marginTop: 6,
   },
-  historyLocation: { fontSize: 12, color: colors.textSecondary || '#546E7A', flex: 1 },
-  historyTime: { fontSize: 10, color: colors.textSecondary || '#90A4AE', marginTop: 4 },
+  historyLocation: { fontSize: normalize(12), color: colors.textSecondary || '#546E7A', flex: 1 },
+  historyTime: { fontSize: normalize(10), color: colors.textSecondary || '#90A4AE', marginTop: 4 },
 });

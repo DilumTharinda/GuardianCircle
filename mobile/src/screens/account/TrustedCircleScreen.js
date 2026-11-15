@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -32,8 +33,10 @@ import { uploadImageToCloudinary } from '../../services/imageUploadService';
 import CircleInviteModal from '../../components/trusted/CircleInviteModal';
 import ThemeToggle from '../../components/ThemeToggle';
 import { ROUTES } from '../../constants/routes';
+import { scale, verticalScale, normalize } from '../../utils/responsive';
 
 export default function TrustedCircleScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { user, userProfile } = useAuth();
   const { colors, isDark } = useTheme();
 
@@ -63,10 +66,24 @@ export default function TrustedCircleScreen({ navigation, route }) {
   const activeCircle = circles.find((c) => c.id === selectedCircleId) || circles[0];
   const isAdmin = activeCircle?.createdBy === user?.uid || (activeCircle?.adminUids || []).includes(user?.uid);
 
-  // Configure navigation header options: Keep dark/light mode icon in same position, add + button left to it
+  // Configure navigation header options
   useEffect(() => {
     navigation.setOptions({
-      headerTitle: viewMode === 'detail' && activeCircle ? activeCircle.name : 'Trusted Circle',
+      headerTitleAlign: 'left',
+      headerTitle: () => (
+        <Text
+          style={{
+            color: '#FFF',
+            fontWeight: 'bold',
+            fontSize: 18,
+            maxWidth: 150,
+          }}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {viewMode === 'detail' && activeCircle ? activeCircle.name : 'Trusted Circle'}
+        </Text>
+      ),
       headerLeft:
         viewMode === 'detail'
           ? () => (
@@ -80,7 +97,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
             )
           : undefined,
       headerRight: () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
           {/* + New Circle Button */}
           <TouchableOpacity
             onPress={() => setCreateModalVisible(true)}
@@ -88,21 +105,21 @@ export default function TrustedCircleScreen({ navigation, route }) {
               flexDirection: 'row',
               alignItems: 'center',
               backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              paddingHorizontal: 10,
+              paddingHorizontal: 8,
               paddingVertical: 5,
               borderRadius: 16,
-              marginRight: 10,
+              marginRight: 8,
               borderWidth: 1,
               borderColor: 'rgba(255, 255, 255, 0.35)',
             }}
             activeOpacity={0.8}
           >
-            <Ionicons name="add" size={18} color="#FFF" style={{ marginRight: 2 }} />
-            <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 13 }}>New Circle</Text>
+            <Ionicons name="add" size={16} color="#FFF" style={{ marginRight: 2 }} />
+            <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 12 }}>New</Text>
           </TouchableOpacity>
 
-          {/* Dark / Light Mode Toggle in its exact original header position */}
-          <ThemeToggle style={{ marginRight: 15 }} iconColor="#fff" />
+          {/* Theme Toggle Button */}
+          <ThemeToggle iconColor="#fff" />
         </View>
       ),
     });
@@ -472,7 +489,10 @@ export default function TrustedCircleScreen({ navigation, route }) {
       ) : viewMode === 'list' ? (
         /* WhatsApp-Style Circles/Groups List */
         <ScrollView
-          contentContainerStyle={styles.whatsappListContent}
+          contentContainerStyle={[
+            styles.whatsappListContent,
+            { paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {circles.map((circle) => {
@@ -604,9 +624,23 @@ export default function TrustedCircleScreen({ navigation, route }) {
         </ScrollView>
       ) : (
         /* Detailed Circle Management View (Selected Circle) */
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom, 24) },
+          ]}
+        >
           {activeCircle && (
-            <View style={[styles.card, { backgroundColor: colors.surface || colors.card || '#FFFFFF', borderColor: isDark ? colors.border || '#2A3D2A' : 'transparent', borderWidth: isDark ? 1 : 0 }]}>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: isDark ? colors.surface || '#1A2420' : '#FFFFFF',
+                  borderColor: isDark ? colors.border || '#2A3D2A' : '#E0E8E0',
+                  borderWidth: 1,
+                },
+              ]}
+            >
               {/* Card Header & Admin Status */}
               <View style={styles.cardHeader}>
                 {/* Circle Avatar (Tap to change group image if admin) */}
@@ -634,9 +668,9 @@ export default function TrustedCircleScreen({ navigation, route }) {
                   )}
                 </TouchableOpacity>
 
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginRight: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
                       {activeCircle.name}
                     </Text>
                     {isAdmin && (
@@ -652,7 +686,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
                       </TouchableOpacity>
                     )}
                   </View>
-                  <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                  <Text style={[styles.cardSub, { color: colors.textSecondary }]} numberOfLines={2}>
                     {isAdmin ? 'You are the Circle Admin' : `Created by ${activeCircle.createdByName || 'Admin'}`} •{' '}
                     {(activeCircle.members || []).length} Member{(activeCircle.members || []).length > 1 ? 's' : ''}
                   </Text>
@@ -679,16 +713,20 @@ export default function TrustedCircleScreen({ navigation, route }) {
               {/* Action Buttons Row: View on Map, Chat & Invite Member */}
               <View style={styles.actionRow}>
                 <TouchableOpacity
-                  style={styles.viewOnMapBtn}
+                  style={styles.actionBtnItem}
                   onPress={handleTrackCircleOnMap}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="map" size={16} color="#FFF" style={{ marginRight: 5 }} />
-                  <Text style={styles.viewOnMapText}>Live Map</Text>
+                  <View style={[styles.actionBtnIconCircle, { backgroundColor: isDark ? '#004D40' : '#E0F2F1' }]}>
+                    <Ionicons name="map" size={18} color={isDark ? colors.accentGreen || '#00E676' : '#00796B'} />
+                  </View>
+                  <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]} numberOfLines={1}>
+                    Live Map
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.circleChatBtn}
+                  style={styles.actionBtnItem}
                   onPress={() => {
                     navigation.navigate(ROUTES.CIRCLE_CHAT, {
                       circleId: activeCircle.id,
@@ -699,18 +737,26 @@ export default function TrustedCircleScreen({ navigation, route }) {
                   }}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="chatbubbles" size={16} color="#FFF" style={{ marginRight: 5 }} />
-                  <Text style={styles.circleChatBtnText}>Chat</Text>
+                  <View style={[styles.actionBtnIconCircle, { backgroundColor: isDark ? '#0D47A1' : '#E1F5FE' }]}>
+                    <Ionicons name="chatbubbles" size={18} color={isDark ? '#42A5F5' : '#0288D1'} />
+                  </View>
+                  <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]} numberOfLines={1}>
+                    Chat
+                  </Text>
                 </TouchableOpacity>
 
                 {isAdmin && (
                   <TouchableOpacity
-                    style={[styles.inviteBtn, { backgroundColor: isDark ? colors.darkGreenSurface || '#032B27' : '#E0F2F1' }]}
+                    style={styles.actionBtnItem}
                     onPress={() => setInviteModalVisible(true)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="person-add" size={15} color={isDark ? colors.accentGreen || '#00E676' : '#00897B'} style={{ marginRight: 4 }} />
-                    <Text style={[styles.inviteBtnText, { color: isDark ? colors.accentGreen || '#00E676' : '#00897B' }]}>Invite</Text>
+                    <View style={[styles.actionBtnIconCircle, { backgroundColor: isDark ? '#1B5E20' : '#E8F5E9' }]}>
+                      <Ionicons name="person-add" size={18} color={isDark ? '#69F0AE' : '#2E7D32'} />
+                    </View>
+                    <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]} numberOfLines={1}>
+                      Invite
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -761,7 +807,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
 
                         <View style={{ flex: 1, marginLeft: 12 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={[styles.memberName, { color: colors.textPrimary }]}>
+                            <Text style={[styles.memberName, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
                               {member.displayName}
                             </Text>
                             {isMe && (
@@ -771,7 +817,7 @@ export default function TrustedCircleScreen({ navigation, route }) {
                               </Text>
                             )}
                           </View>
-                          <Text style={[styles.memberSub, { color: colors.textSecondary }]}>
+                          <Text style={[styles.memberSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
                             {member.username ? `@${member.username}` : member.email}
                           </Text>
                         </View>
@@ -1231,51 +1277,33 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-around',
+    marginBottom: verticalScale(20),
+    paddingVertical: verticalScale(6),
   },
-  viewOnMapBtn: {
+  actionBtnItem: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00897B',
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginRight: 8,
+    paddingHorizontal: 4,
   },
-  viewOnMapText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  circleChatBtn: {
-    flex: 1,
-    flexDirection: 'row',
+  actionBtnIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0288D1',
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginRight: 8,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  circleChatBtnText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  inviteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E0F2F1',
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 10,
-  },
-  inviteBtnText: {
-    color: '#00897B',
-    fontWeight: 'bold',
-    fontSize: 14,
+  actionBtnLabel: {
+    fontSize: normalize(12),
+    fontWeight: '600',
+    textAlign: 'center',
   },
   membersSection: {
     marginTop: 4,

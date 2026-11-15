@@ -42,14 +42,19 @@ import { getCurrentCoordinates } from '../../services/locationService';
 import { subscribeToNearbyActivities } from '../../services/nearbyActivityService';
 import { subscribeUserCircles } from '../../services/trustedCircleGroupService';
 import SosButton from '../../components/SosButton';
+import EmergencyAlertModal from '../../components/emergency/EmergencyAlertModal';
+import BackgroundPermissionModal from '../../components/emergency/BackgroundPermissionModal';
+import { useEmergencyAlert } from '../../context/EmergencyAlertContext';
+import { scale, verticalScale, normalize } from '../../utils/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
 // ── SOS button geometry ──────────────────────────────────────────
-const SOS_SIZE  = 160;           // Diameter of the red button
-const RING1_D   = SOS_SIZE + 64; // Inner pulse ring diameter
-const RING2_D   = SOS_SIZE + 116;// Outer pulse ring diameter
-const CONTAINER = RING2_D + 20;  // Container that holds everything
+const SOS_SIZE  = scale(160);           // Diameter of the red button
+const RING1_D   = SOS_SIZE + scale(64); // Inner pulse ring diameter
+const RING2_D   = SOS_SIZE + scale(116);// Outer pulse ring diameter
+const CONTAINER = RING2_D + scale(20);  // Container that holds everything
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -62,6 +67,8 @@ export default function HomeScreen() {
   const navigation = useNavigation();
   const { userProfile } = useAuth();
   const { isDark, toggleTheme, colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { isEmergencyActive, activeSOS, acknowledgeAndStopSOS, viewOnMap } = useEmergencyAlert();
 
   const childMode = userProfile && isChild(userProfile.role);
   const isParent  =
@@ -302,13 +309,13 @@ export default function HomeScreen() {
   const firstName = userProfile?.displayName?.split(' ')[0] || 'Guardian';
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.darkGreen} />
+    <View style={[styles.root, { backgroundColor: isEmergencyActive ? '#B71C1C' : colors.background }]}>
+      <StatusBar barStyle="light-content" backgroundColor={isEmergencyActive ? '#B71C1C' : colors.darkGreen} />
 
-      {/* ── Dark green header ── */}
+      {/* ── Header: turns Emergency Red when active circle SOS is triggered ── */}
       <Animated.View style={[styles.header, { opacity: headerAnim }]}>
         <LinearGradient
-          colors={[colors.darkGreen, colors.darkGreenMid]}
+          colors={isEmergencyActive ? ['#D32F2F', '#B71C1C'] : [colors.darkGreen, colors.darkGreenMid]}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -316,8 +323,8 @@ export default function HomeScreen() {
           <View style={styles.headerRow}>
             {/* Left: greeting */}
             <View style={styles.headerLeft}>
-              <Text style={styles.greetingSmall}>{getGreeting()}</Text>
-              <Text style={styles.greetingName}>{firstName}</Text>
+              <Text style={styles.greetingSmall} numberOfLines={1}>{getGreeting()}</Text>
+              <Text style={styles.greetingName} numberOfLines={1} ellipsizeMode="tail">{firstName}</Text>
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.75)" />
                 <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
@@ -513,7 +520,7 @@ export default function HomeScreen() {
                               <Text style={[styles.circleHeroTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                                 {circle.name || `Circle #${idx + 1}`}
                               </Text>
-                              <Text style={[styles.circleHeroSub, { color: colors.textSecondary }]}>
+                              <Text style={[styles.circleHeroSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
                                 {`${memberCount} trusted member(s) active`}
                               </Text>
                             </View>
@@ -753,6 +760,17 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── Emergency SOS Active Modal from Trusted Circle ── */}
+      <EmergencyAlertModal
+        visible={isEmergencyActive}
+        alertData={activeSOS}
+        onAcknowledge={acknowledgeAndStopSOS}
+        onViewMap={viewOnMap}
+      />
+
+      {/* ── First-time Background Execution & Notification Permission Onboarding ── */}
+      <BackgroundPermissionModal />
     </View>
   );
 }
