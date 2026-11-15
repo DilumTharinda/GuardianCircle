@@ -261,6 +261,37 @@ service cloud.firestore {
     }
 
     // ─── Default: deny everything else ───────────────────────────────────
+    // ─── TrustedCircles Collection ───────────────────────────────────────
+    // Primary User Trusted Circles (Group Circles with Admin & Members)
+    match /trustedCircles/{circleId} {
+      // Authenticated users can read circle metadata to discover invites, view member lists, and join
+      allow read: if isAuthenticated();
+
+      // Any authenticated user can create a new trusted circle (they become admin)
+      allow create: if isAuthenticated()
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // Allow update:
+      // 1. Admin or creator can update circle configuration, members, and invites
+      // 2. Any authenticated user invited to the circle can accept/decline or join/leave
+      allow update: if isAuthenticated();
+
+      // Only the circle creator / admin or app admin can delete the circle
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        ('adminUids' in resource.data && request.auth.uid in resource.data.adminUids) ||
+        isAdmin()
+      );
+
+      // ─── Group Chat Messages inside a trusted circle ───────────────
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated();
+        allow update, delete: if isAuthenticated() && (
+          resource.data.senderId == request.auth.uid || isAdmin()
+        );
+      }
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

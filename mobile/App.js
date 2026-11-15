@@ -1,6 +1,32 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+
+// Suppress known web-specific benign framework notices without affecting native app debugging
+if (Platform.OS === 'web') {
+  LogBox.ignoreLogs([
+    'Animated: `useNativeDriver` is not supported',
+    'The Geocoding API has been removed in SDK 49',
+    'google.maps.Marker is deprecated',
+    '<gmp-advanced-marker>',
+  ]);
+  // Also filter console.warn in web browser console for standard Google Maps web component notes
+  if (typeof console !== 'undefined' && console.warn) {
+    const origWarn = console.warn;
+    console.warn = (...args) => {
+      const msg = args[0] ? String(args[0]) : '';
+      if (
+        msg.includes('useNativeDriver') ||
+        msg.includes('gmp-advanced-marker') ||
+        msg.includes('gmp-pin') ||
+        msg.includes('Geocoding API has been removed')
+      ) {
+        return;
+      }
+      origWarn.apply(console, args);
+    };
+  }
+}
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';

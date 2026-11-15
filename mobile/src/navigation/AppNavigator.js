@@ -14,6 +14,7 @@ import ChildLocationScreen from '../screens/parentchild/ChildLocationScreen';
 import SafeZonesScreen from '../screens/parentchild/SafeZonesScreen';
 import ChildHistoryScreen from '../screens/parentchild/ChildHistoryScreen';
 import TrustedCircleScreen from '../screens/account/TrustedCircleScreen';
+import CircleChatScreen from '../screens/account/CircleChatScreen';
 import VerifyEmailScreen from '../screens/account/VerifyEmailScreen';
 import EditProfileScreen from '../screens/account/EditProfileScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
@@ -90,6 +91,14 @@ export default function AppNavigator() {
               options={{
                 title: 'Trusted Circle',
                 headerShown: true,
+              }}
+            />
+            <Stack.Screen
+              name={ROUTES.CIRCLE_CHAT}
+              component={CircleChatScreen}
+              options={{
+                headerShown: true,
+                headerTitleAlign: 'left',
               }}
             />
             <Stack.Screen

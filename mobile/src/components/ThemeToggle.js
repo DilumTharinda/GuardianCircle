@@ -11,8 +11,8 @@ export default function ThemeToggle({ style, iconColor, backgroundColor }) {
 
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.8, duration: 100, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, tension: 150, friction: 5, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 0.85, duration: 60, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, tension: 200, friction: 6, useNativeDriver: true }),
     ]).start();
   }, [isDark]);
 
@@ -25,7 +25,8 @@ export default function ThemeToggle({ style, iconColor, backgroundColor }) {
   return (
     <TouchableOpacity
       onPress={toggleTheme}
-      activeOpacity={0.7}
+      activeOpacity={0.6}
+      delayPressIn={0}
       style={[styles.container, { backgroundColor: defaultBg }, style]}
     >
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
