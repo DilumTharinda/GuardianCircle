@@ -1,0 +1,16 @@
+GuardianCircle M5 now uses verified Firebase parent/child accounts and child-approved links instead of demo sessions and fictional tracking records. Parents see accepted children and their recorded positions; children control foreground sharing, check-ins, emergency requests and unlinking. Safe zones use explicit coordinates and record real transitions. Tracking routes are role-gated and family controls use consistent vector icons.
+
+This also adds an explicit development-only local test setup so parent/child behavior can be exercised without production credentials. The Windows launcher starts local Auth/Firestore services, seeds a parent and two verified child accounts, and serves a phone setup page with the matching Expo client and QR code. Generated passwords, environment files, APKs, downloads, screenshots and logs are ignored by Git. Local mode is rejected in release builds; the normal Maps configuration requirement remains in place outside local mode.
+
+Validation:
+- 130 Node service tests passed, including 26 M5 checks.
+- 8 existing Jest tests passed.
+- All 7 Firebase emulator permission checks passed against the reference rules.
+- The actual M5 service code passed local integration checks covering two-child consent, child-only location writes, zone history, check-ins, SOS state and revocation.
+- Child sign-in and My Family rendering were verified in the Android virtual device using Expo Go.
+- The user confirmed the phone setup page opens on their physical Android phone; the installer endpoint returned HTTP 200.
+- Whitespace and script syntax checks passed.
+
+Production Firebase rules still need merging with the other modules' reviewed rules and deployment. Physical-device GPS accuracy, Google Maps rendering, background/terminated-app tracking, push delivery, BLE hardware, legacy-data migration and cascading account cleanup remain outstanding. Virtual-device GPS synchronization was not confirmed. Web export remains blocked by the existing expo-sqlite WASM resolution issue in the app startup path. The local fixture loads only M5 rules, so other modules may report permission errors.
+
+See DOC/M5_PARENT_CHILD_TRACKING.md for the implementation and DOC/M5_LOCAL_PHONE_TESTING.md for local setup, validation and manual testing instructions.

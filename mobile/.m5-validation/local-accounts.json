@@ -1,0 +1,23 @@
+[
+  {
+    "email": "parent@guardiancircle.test",
+    "displayName": "Test Parent",
+    "role": "parent_guardian",
+    "uid": "6aFscz5QA3Q2te57gLM83TgM54dS",
+    "password": "GuardianTest8782!"
+  },
+  {
+    "email": "child1@guardiancircle.test",
+    "displayName": "Test Child One",
+    "role": "child_dependent",
+    "uid": "6No797LZ5hR7SQMau5lDkukJ7vIi",
+    "password": "GuardianTest8782!"
+  },
+  {
+    "email": "child2@guardiancircle.test",
+    "displayName": "Test Child Two",
+    "role": "child_dependent",
+    "uid": "2ByiasYO6vEIeg9cFUrrWRsI7b7V",
+    "password": "GuardianTest8782!"
+  }
+]
