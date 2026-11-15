@@ -18,12 +18,14 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { RADIUS, SHADOWS } from '../../constants/theme';
 
 export default function MatchChatScreen({ route }) {
+  const insets = useSafeAreaInsets();
   const { matchId } = route.params;
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
@@ -98,7 +100,14 @@ export default function MatchChatScreen({ route }) {
         contentContainerStyle={styles.messageList}
       />
 
-      <View style={styles.inputRow}>
+      <View
+        style={[
+          styles.inputRow,
+          {
+            paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 10),
+          },
+        ]}
+      >
         <TextInput
           style={styles.textInput}
           placeholder="Type a message..."

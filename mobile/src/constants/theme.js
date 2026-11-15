@@ -1,3 +1,5 @@
+import { scale, normalize, verticalScale } from '../utils/responsive';
+
 /**
  * Shared theme constants for GuardianCircle.
  * Central design tokens used across all modules.
@@ -55,24 +57,24 @@ export const COLORS = {
 };
 
 export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  base: 16,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+  xs: scale(4),
+  sm: scale(8),
+  md: scale(12),
+  base: scale(16),
+  lg: scale(16),
+  xl: scale(20),
+  xxl: scale(24),
+  xxxl: scale(32),
 };
 
 export const TYPOGRAPHY = {
-  h1: { fontSize: 28, fontWeight: '700', color: COLORS.textPrimary },
-  h2: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary },
-  h3: { fontSize: 18, fontWeight: '600', color: COLORS.textPrimary },
-  body1: { fontSize: 16, fontWeight: '400', color: COLORS.textPrimary },
-  body2: { fontSize: 14, fontWeight: '400', color: COLORS.textSecondary },
-  caption: { fontSize: 12, fontWeight: '500', color: COLORS.textMuted },
-  badge: { fontSize: 11, fontWeight: '600' },
+  h1: { fontSize: normalize(28), fontWeight: '700', color: COLORS.textPrimary },
+  h2: { fontSize: normalize(22), fontWeight: '700', color: COLORS.textPrimary },
+  h3: { fontSize: normalize(18), fontWeight: '600', color: COLORS.textPrimary },
+  body1: { fontSize: normalize(16), fontWeight: '400', color: COLORS.textPrimary },
+  body2: { fontSize: normalize(14), fontWeight: '400', color: COLORS.textSecondary },
+  caption: { fontSize: normalize(12), fontWeight: '500', color: COLORS.textMuted },
+  badge: { fontSize: normalize(11), fontWeight: '600' },
 };
 
 export const SHADOWS = {
@@ -107,22 +109,22 @@ export const SHADOWS = {
 };
 
 export const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
+  sm: scale(8),
+  md: scale(12),
+  lg: scale(16),
+  xl: scale(24),
   full: 9999,
   round: 9999,
 };
 
 export const FONTS = {
-  xs: 10,
-  sm: 12,
-  base: 14,
-  md: 16,
-  lg: 18,
-  xl: 24,
-  xxl: 28,
+  xs: normalize(10),
+  sm: normalize(12),
+  base: normalize(14),
+  md: normalize(16),
+  lg: normalize(18),
+  xl: normalize(24),
+  xxl: normalize(28),
   regular: '400',
   medium: '500',
   semiBold: '600',

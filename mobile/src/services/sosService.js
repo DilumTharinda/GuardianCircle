@@ -8,6 +8,7 @@ import { isChild } from '../constants/roles';
 import { getTrustedCircleSOSRecipientIds } from './trustedCircleService';
 import { getAllUserCircleMemberUids } from './trustedCircleGroupService';
 import { dispatchBroadcastNotification, dispatchPersonalNotification } from './notificationCenterService';
+import { sendNotificationToUsers } from './notificationService';
 import { logActivity, AUDIT_ACTIONS } from './auditLogService';
 
 const LOCAL_ALERTS_KEY = '@guardiancircle_local_alerts';
@@ -191,11 +192,29 @@ export async function triggerSOS(triggerType = 'in_app', extraMeta = {}) {
         body: `${userName} triggered an Emergency SOS near ${locationData.address || 'nearby'}. Tap to track immediately.`,
         category: 'sos',
         priority: 'high',
-        data: { alertId, location: locationData },
+        data: { alertId, location: locationData, userName, userId: uid },
         linkRoute: 'Map',
         linkParams: { focusAlertId: alertId, alertLocation: locationData },
       }).catch(() => {});
     });
+
+    // Also send OS-Level Push Notification via Expo Push Gateway with MAX Priority SOS channel
+    if (recipientIds.length > 0) {
+      sendNotificationToUsers(recipientIds, {
+        title: '🚨 EMERGENCY SOS FROM TRUSTED CIRCLE',
+        body: `${userName} triggered an Emergency SOS near ${locationData.address || 'nearby'}. Tap to track immediately.`,
+        category: 'sos',
+        data: {
+          alertId,
+          userId: uid,
+          userName,
+          userEmail,
+          location: locationData,
+          category: 'sos',
+          type: 'sos',
+        },
+      }).catch((e) => console.warn('[sosService] Push notification dispatch error:', e));
+    }
 
     // Tier-2 Escalation: If no circle recipients exist, or after 60-second unread window, broadcast to community
     const hasCircleRecipients = recipientIds.length > 0;

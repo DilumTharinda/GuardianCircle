@@ -91,6 +91,7 @@ export default function AppNavigator() {
               options={{
                 title: 'Trusted Circle',
                 headerShown: true,
+                headerRight: null,
               }}
             />
             <Stack.Screen
