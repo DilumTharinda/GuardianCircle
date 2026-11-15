@@ -26,10 +26,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FONTS, SPACING, RADIUS, SHADOWS } from '../../constants/theme';
 import { ROUTES } from '../../constants/routes';
 import { subscribeUserCircles } from '../../services/trustedCircleGroupService';
 import ThemeToggle from '../../components/ThemeToggle';
+import { scale, verticalScale, normalize } from '../../utils/responsive';
 
 function formatRole(role) {
   if (!role) return 'User';
@@ -37,6 +39,7 @@ function formatRole(role) {
 }
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const { userProfile, logout } = useAuth();
   const { colors } = useTheme();
   const navigation = useNavigation();
@@ -110,7 +113,7 @@ export default function ProfileScreen() {
     ? userProfile.displayName[0].toUpperCase()
     : 'U';
 
-  const styles = getStyles(colors);
+  const styles = getStyles(colors, insets);
 
   return (
     <View style={styles.root}>
@@ -129,7 +132,7 @@ export default function ProfileScreen() {
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 50 : 30, right: 15 }}>
+            <View style={{ position: 'absolute', top: (insets?.top || 24) + 6, right: scale(15) }}>
               <ThemeToggle iconColor="#fff" />
             </View>
 
@@ -148,13 +151,13 @@ export default function ProfileScreen() {
               <View style={styles.onlineDot} />
             </Animated.View>
 
-            <Text style={styles.headerName}>
+            <Text style={styles.headerName} numberOfLines={1} ellipsizeMode="tail">
               {userProfile?.displayName || 'User Name'}
             </Text>
-            <Text style={styles.headerUsername}>
+            <Text style={styles.headerUsername} numberOfLines={1} ellipsizeMode="tail">
               @{userProfile?.username || 'username'}
             </Text>
-            <Text style={styles.headerEmail}>
+            <Text style={styles.headerEmail} numberOfLines={1} ellipsizeMode="tail">
               {userProfile?.email || 'email@example.com'}
             </Text>
 
@@ -303,8 +306,8 @@ function StatBlock({ colors, icon, value, label, onPress }) {
       disabled={!onPress}
     >
       {icon}
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -314,8 +317,8 @@ function InfoRow({ colors, icon, label, value, isLast }) {
   return (
     <View style={[styles.infoRow, isLast && styles.infoRowLast]}>
       <View style={styles.infoRowIcon}>{icon}</View>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+      <Text style={styles.infoLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.infoValue} numberOfLines={1} ellipsizeMode="tail">{value}</Text>
     </View>
   );
 }
@@ -329,31 +332,31 @@ function MenuRow({ colors, icon, label, onPress, isLast }) {
       activeOpacity={0.7}
     >
       <View style={styles.infoRowIcon}>{icon}</View>
-      <Text style={styles.menuLabel}>{label}</Text>
+      <Text style={styles.menuLabel} numberOfLines={1}>{label}</Text>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, insets) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 40 },
+  scrollContent: { paddingBottom: Math.max(insets?.bottom || 0, 32) + 20 },
 
   // Header
   headerGradient: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 44,
-    paddingBottom: 32,
+    paddingTop: (insets?.top || 24) + verticalScale(20),
+    paddingBottom: verticalScale(28),
     alignItems: 'center',
-    gap: 6,
+    gap: scale(6),
   },
   avatarWrapper: {
     marginBottom: 8,
   },
   avatar: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: scale(88),
+    height: scale(88),
+    borderRadius: scale(44),
     backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -361,34 +364,34 @@ const getStyles = (colors) => StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.5)',
   },
   avatarText: {
-    fontSize: 38,
+    fontSize: normalize(38),
     fontWeight: FONTS.bold,
     color: '#fff',
   },
   onlineDot: {
     position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    bottom: scale(4),
+    right: scale(4),
+    width: scale(14),
+    height: scale(14),
+    borderRadius: scale(7),
     backgroundColor: colors.accentGreen,
     borderWidth: 2,
     borderColor: colors.darkGreenMid,
   },
   headerName: {
-    fontSize: FONTS.xl,
+    fontSize: normalize(22),
     fontWeight: FONTS.bold,
     color: '#fff',
   },
   headerUsername: {
-    fontSize: FONTS.sm,
+    fontSize: normalize(13),
     color: 'rgba(255,255,255,0.8)',
     fontWeight: FONTS.medium,
     marginBottom: 2,
   },
   headerEmail: {
-    fontSize: FONTS.sm,
+    fontSize: normalize(13),
     color: 'rgba(255,255,255,0.75)',
   },
   roleBadge: {
@@ -402,7 +405,7 @@ const getStyles = (colors) => StyleSheet.create({
     marginTop: 4,
   },
   roleBadgeText: {
-    fontSize: FONTS.xs,
+    fontSize: normalize(11),
     fontWeight: FONTS.semiBold,
     color: 'rgba(255,255,255,0.9)',
     letterSpacing: 0.3,
@@ -429,12 +432,12 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.border,
   },
   statValue: {
-    fontSize: FONTS.lg,
+    fontSize: normalize(18),
     fontWeight: FONTS.bold,
     color: colors.textPrimary,
   },
   statLabel: {
-    fontSize: FONTS.xs,
+    fontSize: normalize(11),
     color: colors.textSecondary,
     fontWeight: FONTS.medium,
   },
@@ -448,7 +451,7 @@ const getStyles = (colors) => StyleSheet.create({
     overflow: 'hidden',
   },
   sectionHeader: {
-    fontSize: FONTS.xs,
+    fontSize: normalize(11),
     fontWeight: FONTS.bold,
     color: colors.textMuted,
     letterSpacing: 0.8,
@@ -475,11 +478,11 @@ const getStyles = (colors) => StyleSheet.create({
   },
   infoLabel: {
     flex: 1,
-    fontSize: FONTS.sm,
+    fontSize: normalize(13),
     color: colors.textSecondary,
   },
   infoValue: {
-    fontSize: FONTS.sm,
+    fontSize: normalize(13),
     fontWeight: FONTS.semiBold,
     color: colors.textPrimary,
     maxWidth: '55%',
@@ -499,7 +502,7 @@ const getStyles = (colors) => StyleSheet.create({
   menuRowLast: { borderBottomWidth: 0 },
   menuLabel: {
     flex: 1,
-    fontSize: FONTS.base,
+    fontSize: normalize(14),
     color: colors.textPrimary,
     fontWeight: FONTS.medium,
   },
@@ -519,7 +522,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderColor: '#FFCDD2',
   },
   logoutText: {
-    fontSize: FONTS.base,
+    fontSize: normalize(14),
     fontWeight: FONTS.bold,
     color: colors.dangerRed,
   },

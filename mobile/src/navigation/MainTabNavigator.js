@@ -8,6 +8,8 @@ import { useTheme } from '../context/ThemeContext';
 import { isChild, isParent } from '../constants/roles';
 import { ROUTES } from '../constants/routes';
 import ThemeToggle from '../components/ThemeToggle';
+import { scale, verticalScale, normalize } from '../utils/responsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Import screens
 import HomeScreen from '../screens/shell/HomeScreen';
@@ -32,6 +34,7 @@ const TAB_ICONS = {
 export default function MainTabNavigator() {
   const { userProfile } = useAuth();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const childMode = userProfile && isChild(userProfile.role);
   const parentMode = userProfile && isParent(userProfile.role);
   const lastMapTapRef = useRef(0);
@@ -50,19 +53,19 @@ export default function MainTabNavigator() {
           backgroundColor: colors.surface,
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          paddingBottom: 6,
-          paddingTop: 4,
-          height: 62,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : verticalScale(12),
+          paddingTop: verticalScale(4),
+          height: insets.bottom > 0 ? verticalScale(60) + insets.bottom : verticalScale(70),
         },
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: normalize(10),
           fontWeight: '600',
           marginTop: 0,
         },
         headerStyle: { backgroundColor: colors.darkGreen },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: 'bold' },
-        headerRight: () => <ThemeToggle style={{ marginRight: 15 }} iconColor="#fff" />,
+        headerRight: () => <ThemeToggle style={{ marginRight: scale(15) }} iconColor="#fff" />,
       })}
     >
       <Tab.Screen

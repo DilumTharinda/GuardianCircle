@@ -65,6 +65,36 @@ if (Platform.OS !== 'web') {
 }
 
 /**
+ * Ensure notification channels are registered on Android immediately upon module load.
+ */
+export async function setupNotificationChannelsAsync() {
+  if (Platform.OS === 'android') {
+    try {
+      await Notifications.setNotificationChannelAsync('sos', {
+        name: 'Emergency SOS Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 600, 300, 600, 300, 800, 400],
+        sound: 'default',
+        enableLights: true,
+        lightColor: '#D32F2F',
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+        bypassDnd: true,
+      });
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'General Notifications',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    } catch (e) {
+      console.warn('[notificationService] Failed to set up notification channels:', e);
+    }
+  }
+}
+
+if (Platform.OS === 'android') {
+  setupNotificationChannelsAsync().catch(() => {});
+}
+
+/**
  * Trigger an immediate local push notification on the device.
  */
 export async function triggerLocalNotification({ title, body, data = {} }) {
@@ -113,17 +143,7 @@ export async function registerForPushNotificationsAsync(uid) {
     return null;
   }
 
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('sos', {
-      name: 'Emergency SOS Alerts',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-    });
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'General Notifications',
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
-  }
+  await setupNotificationChannelsAsync();
 
   let tokenData;
   try {
@@ -144,7 +164,8 @@ export async function registerForPushNotificationsAsync(uid) {
   return pushToken;
 }
 
-async function sendExpoPushMessage(pushToken, { title, body, data }) {
+async function sendExpoPushMessage(pushToken, { title, body, data, category }) {
+  const isSOS = category === 'sos' || data?.category === 'sos' || data?.type === 'sos';
   const response = await fetch(EXPO_PUSH_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -158,6 +179,8 @@ async function sendExpoPushMessage(pushToken, { title, body, data }) {
       body,
       data: data ?? {},
       priority: 'high',
+      channelId: isSOS ? 'sos' : 'default',
+      _displayInForeground: true,
     }),
   });
 
@@ -213,7 +236,7 @@ export async function sendNotificationToUser(uid, { title, body, data, category 
   }
 
   try {
-    await sendExpoPushMessage(pushToken, { title, body, data });
+    await sendExpoPushMessage(pushToken, { title, body, data, category });
     return { sent: true };
   } catch (err) {
     console.warn('[notificationService] Send failed:', err);

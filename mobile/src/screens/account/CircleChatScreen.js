@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -22,6 +23,7 @@ import {
 } from '../../services/trustedCircleGroupService';
 
 export default function CircleChatScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { circleId, circleName: initialCircleName, circlePhotoURL: initialPhotoURL, members: initialMembers } = route.params || {};
   const { user, userProfile } = useAuth();
   const { colors, isDark } = useTheme();
@@ -250,6 +252,7 @@ export default function CircleChatScreen({ route, navigation }) {
           {
             backgroundColor: isDark ? colors.surface || '#1A2420' : colors.surface || '#FFFFFF',
             borderTopColor: colors.border || 'rgba(0,0,0,0.06)',
+            paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 8),
           },
         ]}
       >
@@ -298,7 +301,7 @@ const styles = StyleSheet.create({
   headerTitleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    maxWidth: 220,
   },
   headerTextCol: {
     marginLeft: 10,

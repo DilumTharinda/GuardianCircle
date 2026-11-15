@@ -1,6 +1,12 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, LogBox } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+
+// Set global font scaling limit to avoid UI breaks on devices with large system fonts
+if (Text.defaultProps == null) Text.defaultProps = {};
+Text.defaultProps.maxFontSizeMultiplier = 1.3;
+if (TextInput.defaultProps == null) TextInput.defaultProps = {};
+TextInput.defaultProps.maxFontSizeMultiplier = 1.3;
 
 // Suppress known web-specific benign framework notices without affecting native app debugging
 if (Platform.OS === 'web') {
@@ -31,6 +37,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { EmergencyAlertProvider } from './src/context/EmergencyAlertContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { navigationRef } from './src/navigation/navigationService';
 import { initOfflineDb } from './src/services/offlineStorageService';
@@ -77,10 +84,12 @@ export default function App() {
       <ErrorBoundary>
         <ThemeProvider>
           <AuthProvider>
-            <NavigationContainer ref={navigationRef}>
-              <StatusBar style="auto" />
-              <AppNavigator />
-            </NavigationContainer>
+            <EmergencyAlertProvider>
+              <NavigationContainer ref={navigationRef}>
+                <StatusBar style="auto" />
+                <AppNavigator />
+              </NavigationContainer>
+            </EmergencyAlertProvider>
           </AuthProvider>
         </ThemeProvider>
       </ErrorBoundary>
