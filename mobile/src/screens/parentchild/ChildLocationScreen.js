@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,16 +10,19 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
+import { formatDistanceToNow } from 'date-fns';
 import { SHADOWS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import { DARK_MAP_STYLE } from '../../constants/mapStyles';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   getChildren,
   updateChildLocation,
   sendCheckInRequest,
-  triggerMockSOS,
 } from '../../services/parentChildService';
+import { avatarIconForChild } from '../../utils/parentChildIcons';
 import MapFallbackView from '../../components/parentchild/MapFallbackView';
 import ChildDeviceModal from '../../components/parentchild/ChildDeviceModal';
 
@@ -41,10 +44,25 @@ if (Platform.OS !== 'web') {
   }
 }
 
+const DEFAULT_COORDS = { latitude: 6.9147, longitude: 79.8732 };
+const FRESH_LOCATION_MS = 5 * 60 * 1000; // older than 5 minutes counts as stale
+
+// The location timestamp can be an ISO string (local data) or a Firestore
+// Timestamp (live data). Return a Date, or null if it can't be read.
+function toDate(value) {
+  if (!value) return null;
+  const date = value.toDate ? value.toDate() : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export default function ChildLocationScreen() {
   const { colors, isDark } = useTheme();
+  const { user } = useAuth();
   const route = useRoute();
   const initialChildId = route.params?.childId;
+
+  // Built before any early return below, so every render can use it.
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
   const [childrenList, setChildrenList] = useState([]);
   const [selectedChildId, setSelectedChildId] = useState(initialChildId);
@@ -55,7 +73,7 @@ export default function ChildLocationScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const kids = await getChildren();
+      const kids = await getChildren(user?.uid);
       setChildrenList(kids);
       if (!selectedChildId && kids.length > 0) {
         setSelectedChildId(kids[0].id);
@@ -65,7 +83,7 @@ export default function ChildLocationScreen() {
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId]);
+  }, [selectedChildId, user?.uid]);
 
   useEffect(() => {
     loadData();
@@ -81,6 +99,29 @@ export default function ChildLocationScreen() {
 
   const activeChild =
     childrenList.find((c) => c.id === selectedChildId) || childrenList[0] || null;
+
+  const childLat = activeChild?.lastLocation?.latitude ?? DEFAULT_COORDS.latitude;
+  const childLng = activeChild?.lastLocation?.longitude ?? DEFAULT_COORDS.longitude;
+
+  const recenterMap = useCallback(() => {
+    if (!mapRef.current) return;
+    mapRef.current.animateToRegion(
+      {
+        latitude: childLat,
+        longitude: childLng,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015,
+      },
+      600
+    );
+  }, [childLat, childLng]);
+
+  // Follow the child when they move or when a different child is picked.
+  // The map is not locked to a fixed region, so the parent can still pan
+  // and zoom between updates.
+  useEffect(() => {
+    if (activeChild) recenterMap();
+  }, [activeChild?.id, childLat, childLng, recenterMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleCallChild() {
     if (!activeChild?.targetPhone) {
@@ -107,7 +148,7 @@ export default function ChildLocationScreen() {
     try {
       await sendCheckInRequest(activeChild.id);
       Alert.alert(
-        '📲 Check-in Request Sent',
+        'Check-in Request Sent',
         `Notification sent to ${activeChild.targetName}'s device. They will be prompted to acknowledge their current location.`
       );
     } catch (err) {
@@ -123,8 +164,8 @@ export default function ChildLocationScreen() {
     const randomOffsetLat = (Math.random() - 0.5) * 0.003;
     const randomOffsetLon = (Math.random() - 0.5) * 0.003;
     const newCoords = {
-      latitude: (activeChild.lastLocation?.latitude || 6.9147) + randomOffsetLat,
-      longitude: (activeChild.lastLocation?.longitude || 79.8732) + randomOffsetLon,
+      latitude: childLat + randomOffsetLat,
+      longitude: childLng + randomOffsetLon,
     };
 
     const updated = await updateChildLocation(
@@ -135,15 +176,15 @@ export default function ChildLocationScreen() {
 
     await loadData();
     const transitions = updated?.transitionSummary;
-    let transitionText = `New coordinates received for ${activeChild.targetName}!\nStatus: "${updated?.currentZoneName}".`;
+    let transitionText = `New coordinates received for ${activeChild.targetName}.\nStatus: "${updated?.currentZoneName}".`;
     if (transitions?.entered?.length > 0) {
-      transitionText += `\n🟢 ENTERED SAFE ZONE: ${transitions.entered.join(', ')}`;
+      transitionText += `\nEntered safe zone: ${transitions.entered.join(', ')}`;
     }
     if (transitions?.exited?.length > 0) {
-      transitionText += `\n🟡 LEFT SAFE ZONE: ${transitions.exited.join(', ')}`;
+      transitionText += `\nLeft safe zone: ${transitions.exited.join(', ')}`;
     }
 
-    Alert.alert('📍 Live GPS Ping Updated', transitionText);
+    Alert.alert('Live GPS Ping Updated', transitionText);
   }
 
   if (loading) {
@@ -158,15 +199,15 @@ export default function ChildLocationScreen() {
   if (!activeChild) {
     return (
       <View style={styles.emptyCenter}>
-        <Text style={styles.emptyEmoji}>🗺️</Text>
+        <MaterialIcons name="map" size={48} color={colors.textMuted} style={{ marginBottom: 8 }} />
         <Text style={styles.emptyTitle}>No Child Selected</Text>
       </View>
     );
   }
 
   const childCoords = {
-    latitude: activeChild.lastLocation?.latitude || 6.9147,
-    longitude: activeChild.lastLocation?.longitude || 79.8732,
+    latitude: childLat,
+    longitude: childLng,
     latitudeDelta: 0.015,
     longitudeDelta: 0.015,
   };
@@ -176,7 +217,12 @@ export default function ChildLocationScreen() {
   const batteryColor =
     battery > 50 ? colors.safeGreen : battery > 20 ? colors.warnOrange : colors.dangerRed;
 
-  const styles = getStyles(colors);
+  // Real "last updated" time from the location record
+  const lastUpdate = toDate(activeChild.lastLocation?.timestamp);
+  const isFresh = lastUpdate ? Date.now() - lastUpdate.getTime() < FRESH_LOCATION_MS : false;
+  const updatedText = lastUpdate
+    ? `Updated ${formatDistanceToNow(lastUpdate, { addSuffix: true })}`
+    : 'No location update yet';
 
   return (
     <View style={styles.container}>
@@ -192,11 +238,15 @@ export default function ChildLocationScreen() {
                 onPress={() => setSelectedChildId(kid.id)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.childPillEmoji}>{kid.avatarEmoji || '🧒'}</Text>
+                <MaterialIcons
+                  name={avatarIconForChild(kid)}
+                  size={18}
+                  color={isSelected ? '#FFF' : colors.textPrimary}
+                />
                 <Text style={[styles.childPillName, isSelected && styles.childPillNameActive]}>
                   {kid.targetName.split(' ')[0]}
                 </Text>
-                {kid.sosActive && <Text style={styles.sosDot}>🚨</Text>}
+                {kid.sosActive && <MaterialIcons name="warning" size={14} color={colors.dangerRed} />}
               </TouchableOpacity>
             );
           })}
@@ -206,40 +256,48 @@ export default function ChildLocationScreen() {
       {/* Map View Area */}
       <View style={styles.mapArea}>
         {MapView && Platform.OS !== 'web' ? (
-          <MapView
-            ref={mapRef}
-            provider={PROVIDER_GOOGLE}
-            style={styles.map}
-            customMapStyle={isDark ? DARK_MAP_STYLE : []}
-            initialRegion={childCoords}
-            region={childCoords}
-          >
-            {/* Safe Zone Geofence Circles */}
-            {safeZones.map((zone) => (
-              <Circle
-                key={zone.id}
-                center={{ latitude: zone.latitude, longitude: zone.longitude }}
-                radius={zone.radius || 200}
-                fillColor={`${zone.color || '#2E7D32'}22`}
-                strokeColor={zone.color || '#2E7D32'}
-                strokeWidth={2}
-              />
-            ))}
-
-            {/* Child Marker */}
-            <Marker
-              coordinate={{
-                latitude: childCoords.latitude,
-                longitude: childCoords.longitude,
-              }}
-              title={activeChild.targetName}
-              description={activeChild.currentZoneName || activeChild.lastLocation?.address}
+          <>
+            <MapView
+              ref={mapRef}
+              provider={PROVIDER_GOOGLE}
+              style={styles.map}
+              customMapStyle={isDark ? DARK_MAP_STYLE : []}
+              initialRegion={childCoords}
             >
-              <View style={[styles.customPin, activeChild.sosActive && styles.customPinSOS]}>
-                <Text style={styles.customPinText}>{activeChild.avatarEmoji || '🧒'}</Text>
-              </View>
-            </Marker>
-          </MapView>
+              {/* Safe Zone Geofence Circles */}
+              {safeZones.map((zone) => (
+                <Circle
+                  key={zone.id}
+                  center={{ latitude: zone.latitude, longitude: zone.longitude }}
+                  radius={zone.radius || 200}
+                  fillColor={`${zone.color || '#2E7D32'}22`}
+                  strokeColor={zone.color || '#2E7D32'}
+                  strokeWidth={2}
+                />
+              ))}
+
+              {/* Child Marker */}
+              <Marker
+                coordinate={{ latitude: childLat, longitude: childLng }}
+                title={activeChild.targetName}
+                description={activeChild.currentZoneName || activeChild.lastLocation?.address}
+              >
+                <View style={[styles.customPin, activeChild.sosActive && styles.customPinSOS]}>
+                  <MaterialIcons name={avatarIconForChild(activeChild)} size={24} color="#FFF" />
+                </View>
+              </Marker>
+            </MapView>
+
+            {/* Jump back to the child after panning away */}
+            <TouchableOpacity
+              style={styles.recenterBtn}
+              onPress={recenterMap}
+              activeOpacity={0.8}
+              accessibilityLabel="Centre map on child"
+            >
+              <MaterialIcons name="my-location" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          </>
         ) : (
           /* Web / Emulator Interactive Radar Fallback */
           <MapFallbackView child={activeChild} safeZones={safeZones} />
@@ -250,25 +308,27 @@ export default function ChildLocationScreen() {
       <View style={styles.bottomCard}>
         {/* Child Profile Header */}
         <View style={styles.cardHeader}>
-          <View style={styles.cardAvatarCol}>
-            <View style={styles.cardAvatar}>
-              <Text style={styles.cardAvatarEmoji}>{activeChild.avatarEmoji || '🧒'}</Text>
-            </View>
+          <View style={styles.cardAvatar}>
+            <MaterialIcons name={avatarIconForChild(activeChild)} size={28} color={colors.primary} />
           </View>
 
           <View style={styles.cardInfoCol}>
             <View style={styles.cardNameRow}>
               <Text style={styles.cardChildName}>{activeChild.targetName}</Text>
               <View style={[styles.batteryPill, { backgroundColor: colors.safeGreenLight }]}>
-                <Text style={[styles.batteryPillText, { color: batteryColor }]}>
-                  🔋 {battery}%
-                </Text>
+                <MaterialIcons
+                  name={battery > 20 ? 'battery-full' : 'battery-alert'}
+                  size={14}
+                  color={batteryColor}
+                />
+                <Text style={[styles.batteryPillText, { color: batteryColor }]}>{battery}%</Text>
               </View>
             </View>
 
             <View style={styles.zoneTagRow}>
+              <MaterialIcons name="place" size={14} color={colors.primary} />
               <Text style={styles.zoneTagText}>
-                📍 {activeChild.currentZoneName || 'Location Active'}
+                {activeChild.currentZoneName || 'Location Active'}
               </Text>
               <Text style={styles.speedTagText}>• {activeChild.speed || 'Walking'}</Text>
             </View>
@@ -281,9 +341,14 @@ export default function ChildLocationScreen() {
           <Text style={styles.addressVal} numberOfLines={2}>
             {activeChild.lastLocation?.address || 'Address synchronizing with satellites...'}
           </Text>
-          <Text style={styles.lastPingTime}>
-            GPS Signal: 🟢 Strong (HDOP 0.8) • Updated just now
-          </Text>
+          <View style={styles.updatedRow}>
+            <MaterialIcons
+              name="fiber-manual-record"
+              size={10}
+              color={isFresh ? colors.safeGreen : colors.warnOrange}
+            />
+            <Text style={styles.lastPingTime}>{updatedText}</Text>
+          </View>
         </View>
 
         {/* Action Button Grid */}
@@ -293,7 +358,8 @@ export default function ChildLocationScreen() {
             onPress={handleCallChild}
             activeOpacity={0.8}
           >
-            <Text style={styles.callButtonText}>📞 Call Child</Text>
+            <MaterialIcons name="phone" size={18} color="#FFF" />
+            <Text style={styles.callButtonText}>Call Child</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -305,7 +371,10 @@ export default function ChildLocationScreen() {
             {requesting ? (
               <ActivityIndicator color="#FFF" />
             ) : (
-              <Text style={styles.checkInButtonText}>📲 Request Check-in</Text>
+              <>
+                <MaterialIcons name="notifications-active" size={18} color="#FFF" />
+                <Text style={styles.checkInButtonText}>Request Check-in</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -317,7 +386,8 @@ export default function ChildLocationScreen() {
             onPress={handleSimulateMovement}
             activeOpacity={0.7}
           >
-            <Text style={styles.simMoveBtnText}>🚶 Simulate Movement & Geofence Ping</Text>
+            <MaterialIcons name="directions-walk" size={16} color={colors.textSecondary} />
+            <Text style={styles.simMoveBtnText}>Simulate Movement & Geofence Ping</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -325,7 +395,8 @@ export default function ChildLocationScreen() {
             onPress={() => setChildDeviceVisible(true)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.simMoveBtnText, { color: '#38BDF8' }]}>📱 View as Child (SOS & Check-in)</Text>
+            <MaterialIcons name="smartphone" size={16} color="#38BDF8" />
+            <Text style={[styles.simMoveBtnText, { color: '#38BDF8' }]}>View as Child (SOS & Check-in)</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -367,10 +438,6 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
   emptyTitle: {
     ...TYPOGRAPHY.h3,
   },
@@ -398,9 +465,6 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.primary,
     ...SHADOWS.small,
   },
-  childPillEmoji: {
-    fontSize: 16,
-  },
   childPillName: {
     fontSize: 13,
     fontWeight: '600',
@@ -410,15 +474,24 @@ const getStyles = (colors) => StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
   },
-  sosDot: {
-    fontSize: 12,
-  },
   mapArea: {
     flex: 1,
     backgroundColor: '#E8EDF2',
   },
   map: {
     flex: 1,
+  },
+  recenterBtn: {
+    position: 'absolute',
+    right: SPACING.lg,
+    top: SPACING.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.medium,
   },
   customPin: {
     width: 44,
@@ -436,9 +509,6 @@ const getStyles = (colors) => StyleSheet.create({
     borderColor: '#FFCDD2',
     transform: [{ scale: 1.2 }],
   },
-  customPinText: {
-    fontSize: 22,
-  },
   bottomCard: {
     backgroundColor: colors.card,
     borderTopLeftRadius: RADIUS.xl,
@@ -454,7 +524,6 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
   },
-  cardAvatarCol: {},
   cardAvatar: {
     width: 48,
     height: 48,
@@ -464,9 +533,6 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  cardAvatarEmoji: {
-    fontSize: 26,
   },
   cardInfoCol: {
     flex: 1,
@@ -482,6 +548,9 @@ const getStyles = (colors) => StyleSheet.create({
     fontSize: 17,
   },
   batteryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: RADIUS.full,
@@ -525,10 +594,15 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.textPrimary,
     lineHeight: 18,
   },
+  updatedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 4,
+  },
   lastPingTime: {
     fontSize: 11,
     color: colors.textMuted,
-    marginTop: 4,
   },
   actionButtonRow: {
     flexDirection: 'row',
@@ -537,6 +611,8 @@ const getStyles = (colors) => StyleSheet.create({
   },
   callButton: {
     flex: 1,
+    flexDirection: 'row',
+    gap: 6,
     backgroundColor: colors.safeGreen,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
@@ -551,6 +627,8 @@ const getStyles = (colors) => StyleSheet.create({
   },
   checkInButton: {
     flex: 1.2,
+    flexDirection: 'row',
+    gap: 6,
     backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: RADIUS.md,
@@ -567,10 +645,13 @@ const getStyles = (colors) => StyleSheet.create({
     marginTop: SPACING.sm,
   },
   simMoveBtn: {
+    flexDirection: 'row',
+    gap: 6,
     backgroundColor: '#F1F3F5',
     paddingVertical: 8,
     borderRadius: RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   simMoveBtnText: {
     fontSize: 12,
